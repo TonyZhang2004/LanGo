@@ -151,6 +151,15 @@ class TranslationStore:
             connection.commit()
         return self._serialize_row(row) if row else None
 
+    def delete_entry(self, entry_id):
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                "DELETE FROM translation_entries WHERE id = ?",
+                (entry_id,),
+            )
+            connection.commit()
+        return cursor.rowcount > 0
+
     def _serialize_row(self, row):
         return {
             "id": str(row["id"]),

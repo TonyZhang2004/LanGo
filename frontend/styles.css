@@ -56,7 +56,7 @@ body::before {
   gap: 24px;
 }
 
-.profile-chip,
+.sync-button,
 .audio-button {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.72);
@@ -64,7 +64,7 @@ body::before {
   backdrop-filter: blur(14px);
 }
 
-.profile-chip:hover,
+.sync-button:hover,
 .language-picker:hover,
 .audio-button:hover {
   transform: translateY(-2px);
@@ -105,49 +105,36 @@ body::before {
 }
 
 .sync-pill {
-  display: inline-flex;
+  display: none;
+}
+
+.sync-panel {
+  display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 16px 0 0;
-  padding: 10px 16px;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 14px;
   border-radius: 999px;
-  background: var(--accent-soft);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: var(--card-shadow);
+}
+
+.sync-label {
+  margin: 0;
+  font-size: 0.95rem;
   font-weight: 700;
+  color: var(--ink);
 }
 
-.sync-pill::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--accent-strong);
-  box-shadow: 0 0 0 8px rgba(155, 222, 55, 0.16);
-}
-
-.profile-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 18px 14px 14px;
+.sync-button {
+  padding: 10px 14px;
   border-radius: 999px;
   cursor: pointer;
-  margin-top: 6px;
-}
-
-.profile-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--warm), #fff8ef);
+  font-family: inherit;
+  font-size: 0.9rem;
   font-weight: 800;
-  font-size: 1.1rem;
-}
-
-.profile-name {
-  font-weight: 700;
-  font-size: 1rem;
+  color: var(--ink);
+  background: linear-gradient(135deg, var(--accent-soft), rgba(255, 255, 255, 0.92));
 }
 
 .content {
@@ -394,8 +381,9 @@ body::before {
     grid-template-columns: 1fr;
   }
 
-  .profile-chip {
+  .sync-panel {
     justify-self: start;
+    flex-wrap: wrap;
   }
 
   .history-columns {
@@ -434,6 +422,11 @@ body::before {
 
   .language-picker {
     min-width: 100%;
+  }
+
+  .sync-panel {
+    width: 100%;
+    border-radius: 24px;
   }
 
   .word {

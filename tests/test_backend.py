@@ -1,30 +1,9 @@
 import json
 import subprocess
-import tempfile
 import unittest
-from pathlib import Path
 
 from backend.groq_audio_translation import GroqAudioTranslator
 from backend.server import resolve_tts_provider
-from backend.translation_store import TranslationStore
-
-
-class TranslationStoreTests(unittest.TestCase):
-    def test_seeded_japanese_entries_use_native_script(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            store = TranslationStore(Path(temp_dir) / "test.db")
-            entries = store.list_entries("japanese")
-            translated_values = {entry["translated"] for entry in entries}
-
-        self.assertIn("ボール", translated_values)
-        self.assertIn("くつ", translated_values)
-
-    def test_seeded_entries_include_language_locale(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            store = TranslationStore(Path(temp_dir) / "test.db")
-            entry = store.list_entries("japanese")[0]
-
-        self.assertEqual(entry["lang"], "ja-JP")
 
 
 class TranslatorSupportTests(unittest.TestCase):

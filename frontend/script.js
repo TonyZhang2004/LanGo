@@ -164,18 +164,21 @@ function App() {
   const [selectedLanguage, setSelectedLanguage] = useState("spanish");
   const [translationsByLanguage, setTranslationsByLanguage] = useState(fallbackTranslations);
   const [playingId, setPlayingId] = useState(null);
-  const [username, setUsername] = useState("Username");
-  const [connectionState, setConnectionState] = useState("Raspberry Pi connected");
+  const [lastSyncTime, setLastSyncTime] = useState("Not synced yet");
   const [audioError, setAudioError] = useState("");
   const [historyError, setHistoryError] = useState("");
   const [voiceNotice, setVoiceNotice] = useState("");
+  const [syncNonce, setSyncNonce] = useState(0);
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setConnectionState("Web app synced with local system voices");
-    }, 1200);
-    return () => window.clearTimeout(timeoutId);
-  }, []);
+  const stampSyncTime = () => {
+    const now = new Date();
+    setLastSyncTime(
+      now.toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    );
+  };
 
   useEffect(() => {
     if (!("speechSynthesis" in window)) {
@@ -226,6 +229,7 @@ function App() {
             ...current,
             [selectedLanguage]: payload.entries,
           }));
+          stampSyncTime();
         }
       } catch (_error) {
         if (!cancelled) {
@@ -234,6 +238,7 @@ function App() {
             ...current,
             [selectedLanguage]: fallbackTranslations[selectedLanguage],
           }));
+          stampSyncTime();
         }
       }
     }
@@ -242,7 +247,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedLanguage]);
+  }, [selectedLanguage, syncNonce]);
 
   const entries = translationsByLanguage[selectedLanguage] || [];
 
@@ -280,24 +285,21 @@ function App() {
         "div",
         { className: "brand-block" },
         h("p", { className: "eyebrow" }, "Language Companion"),
-        h("h1", null, "LanGo"),
-        h("p", { className: "sync-pill" }, connectionState)
+        h("h1", null, "LanGo")
       ),
       h(
-        "button",
-        {
-          className: "profile-chip",
-          type: "button",
-          "aria-label": "Edit profile name",
-          onClick: () => {
-            const nextName = window.prompt("Enter a profile name", username);
-            if (nextName && nextName.trim()) {
-              setUsername(nextName.trim());
-            }
+        "div",
+        { className: "sync-panel" },
+        h("p", { className: "sync-label" }, `Last synced at ${lastSyncTime}`),
+        h(
+          "button",
+          {
+            className: "sync-button",
+            type: "button",
+            onClick: () => setSyncNonce((count) => count + 1),
           },
-        },
-        h("span", { className: "profile-avatar", "aria-hidden": "true" }, username.slice(0, 1).toUpperCase()),
-        h("span", { className: "profile-name" }, username)
+          "Sync now"
+        )
       )
     ),
     h(

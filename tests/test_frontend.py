@@ -34,6 +34,14 @@ class FrontendSmokeTests(unittest.TestCase):
         self.assertIn('event && event.error === "interrupted"', script)
         self.assertIn("let started = false;", script)
 
+    def test_frontend_uses_sync_button_instead_of_profile_component(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("Last synced at", script)
+        self.assertIn("Sync now", script)
+        self.assertNotIn("profile-chip", script)
+        self.assertIn(".sync-button", styles)
+
 
 if __name__ == "__main__":
     unittest.main()
