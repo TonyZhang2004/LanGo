@@ -52,6 +52,7 @@ const languageLocales = {
 };
 
 const fallbackTranslations = seedTranslations;
+const defaultImage = "./assets/no-image.svg";
 
 function findVoiceForLang(lang) {
   if (!("speechSynthesis" in window)) {
@@ -109,43 +110,18 @@ function speakWithBrowser(text, lang, setPlayingId, entryId, setAudioError) {
   return true;
 }
 
-function TranslationCard({ entry, isPlaying, onPlay, onUpload }) {
-  const hasImage = Boolean(entry.image);
+function TranslationCard({ entry, isPlaying, onPlay }) {
   return h(
     "article",
     { className: "history-card" },
     h(
       "div",
       { className: "thumb-wrap" },
-      hasImage
-        ? h("img", {
-            className: "thumb",
-            src: entry.image,
-            alt: `${entry.english} translation item`,
-          })
-        : h(
-            "div",
-            { className: "thumb-fallback", "aria-label": `${entry.english} translation item without image` },
-            h("span", { className: "thumb-fallback-mark", "aria-hidden": "true" }, entry.english.slice(0, 1).toUpperCase()),
-            h("span", { className: "thumb-fallback-text" }, "No image yet")
-          ),
-      h(
-        "label",
-        { className: "upload-chip" },
-        h("input", {
-          className: "upload-input",
-          type: "file",
-          accept: ".jpg,.jpeg,image/jpeg",
-          onChange: (event) => {
-            const file = event.target.files && event.target.files[0];
-            if (file) {
-              onUpload(file);
-            }
-            event.target.value = "";
-          },
-        }),
-        "Upload JPG"
-      )
+      h("img", {
+        className: `thumb ${entry.image ? "" : "thumb is-placeholder"}`.trim(),
+        src: entry.image || defaultImage,
+        alt: entry.image ? `${entry.english} translation item` : `${entry.english} translation item without image`,
+      })
     ),
     h("p", { className: "word english" }, entry.english),
     h(
@@ -259,16 +235,6 @@ function App() {
 
   const entries = translationsByLanguage[selectedLanguage] || [];
 
-  const handleImageUpload = (entryId, file) => {
-    const objectUrl = URL.createObjectURL(file);
-    setTranslationsByLanguage((current) => ({
-      ...current,
-      [selectedLanguage]: (current[selectedLanguage] || []).map((entry) =>
-        entry.id === entryId ? { ...entry, image: objectUrl } : entry
-      ),
-    }));
-  };
-
   const handlePlayAudio = async (entry) => {
     setAudioError("");
     window.speechSynthesis?.cancel();
@@ -378,7 +344,6 @@ function App() {
               entry,
               isPlaying: playingId === entry.id,
               onPlay: () => handlePlayAudio(entry),
-              onUpload: (file) => handleImageUpload(entry.id, file),
             })
           )
         )

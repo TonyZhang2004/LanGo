@@ -162,6 +162,46 @@ Example:
 curl "http://127.0.0.1:8000/api/history?language=spanish"
 ```
 
+## Uploading A Real Image To The Server
+
+The frontend no longer exposes manual image upload for users, but the backend supports server-side image upload for hardware or script-based flows.
+
+Use this when the Pi captures a JPG and you want every machine to see the same file.
+
+### HTTP Endpoint
+
+- `POST /api/upload-image?entryId=<entry_id>&filename=<file_name>`
+
+Send the raw JPG bytes in the request body.
+
+### Example With Python On The Raspberry Pi
+
+```python
+from pathlib import Path
+from urllib import parse, request
+
+
+entry_id = "15"
+image_path = Path("pumpkin.jpg")
+endpoint = (
+    "http://127.0.0.1:8000/api/upload-image?"
+    f"entryId={parse.quote(entry_id)}&filename={parse.quote(image_path.name)}"
+)
+
+req = request.Request(
+    endpoint,
+    data=image_path.read_bytes(),
+    headers={"Content-Type": "image/jpeg"},
+    method="POST",
+)
+
+with request.urlopen(req) as response:
+    print(response.status)
+    print(response.read().decode("utf-8"))
+```
+
+The backend saves the file under `frontend/assets/uploads/` and updates the DB entry to point at the shared server path.
+
 ## Direct Python Store Access
 
 If the Pi-side process runs in the same repo and you do not want to go through HTTP, you can call the store directly from Python.
