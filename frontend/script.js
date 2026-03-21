@@ -116,7 +116,7 @@ function speakWithBrowser(text, lang, setPlayingId, entryId, setAudioError) {
   return true;
 }
 
-function TranslationCard({ entry, isPlaying, onPlay }) {
+function TranslationCard({ entry, isPlaying, isDeleting, onPlay, onDelete }) {
   const displayTime = formatFullDateTime(entry.createdAt, entry.time);
   return h(
     "article",
@@ -147,7 +147,18 @@ function TranslationCard({ entry, isPlaying, onPlay }) {
       },
       h("span", { className: "audio-icon", "aria-hidden": "true" })
     ),
-    h("time", { className: "timestamp", dateTime: entry.createdAt || entry.time }, displayTime)
+    h("time", { className: "timestamp", dateTime: entry.createdAt || entry.time }, displayTime),
+    h(
+      "button",
+      {
+        className: "delete-button",
+        type: "button",
+        onClick: onDelete,
+        disabled: isDeleting,
+        "aria-label": `Delete translation history entry for ${entry.english}`,
+      },
+      isDeleting ? "Deleting..." : "Delete"
+    )
   );
 }
 
@@ -155,6 +166,7 @@ function App() {
   const [selectedLanguage, setSelectedLanguage] = useState("spanish");
   const [translationsByLanguage, setTranslationsByLanguage] = useState(fallbackTranslations);
   const [playingId, setPlayingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [lastSyncTime, setLastSyncTime] = useState("Not synced yet");
   const [audioError, setAudioError] = useState("");
   const [historyError, setHistoryError] = useState("");
@@ -250,6 +262,32 @@ function App() {
     );
   };
 
+  const handleDeleteEntry = async (entry) => {
+    setHistoryError("");
+    setDeletingId(entry.id);
+    try {
+      const response = await fetch(`/api/history?entryId=${encodeURIComponent(entry.id)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error(`Delete request failed with status ${response.status}`);
+      }
+      setTranslationsByLanguage((current) => ({
+        ...current,
+        [selectedLanguage]: (current[selectedLanguage] || []).filter((item) => item.id !== entry.id),
+      }));
+      if (playingId === entry.id) {
+        window.speechSynthesis?.cancel();
+        setPlayingId(null);
+      }
+      stampSyncTime();
+    } catch (_error) {
+      setHistoryError("Could not delete translation entry.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return h(
     "div",
     { className: "page-shell" },
@@ -334,7 +372,8 @@ function App() {
           h("span", null, "English"),
           h("span", null, "Translation"),
           h("span", null, "Audio"),
-          h("span", null, "Time")
+          h("span", null, "Time"),
+          h("span", null, "Delete")
         ),
         h(
           "div",
@@ -344,7 +383,9 @@ function App() {
               key: entry.id,
               entry,
               isPlaying: playingId === entry.id,
+              isDeleting: deletingId === entry.id,
               onPlay: () => handlePlayAudio(entry),
+              onDelete: () => handleDeleteEntry(entry),
             })
           )
         )

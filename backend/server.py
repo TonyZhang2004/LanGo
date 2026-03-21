@@ -68,6 +68,13 @@ def save_uploaded_image(entry_id, filename, payload_bytes):
     return image_path, file_path
 
 
+def resolve_uploaded_image_file(image_path):
+    if not image_path or not str(image_path).startswith("./assets/uploads/"):
+        return None
+    relative_path = str(image_path).removeprefix("./")
+    return FRONTEND_DIR / relative_path
+
+
 class LanGoHandler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         parsed = urlparse(path)
@@ -99,6 +106,13 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/upload-image":
             self._handle_upload_image(parsed)
+            return
+        self._write_json({"error": "Not found."}, status=HTTPStatus.NOT_FOUND)
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/history":
+            self._handle_history_delete(parsed)
             return
         self._write_json({"error": "Not found."}, status=HTTPStatus.NOT_FOUND)
 
@@ -171,6 +185,29 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             return
 
         self._write_json({"entry": entry, "image": image_path}, status=HTTPStatus.OK)
+
+    def _handle_history_delete(self, parsed):
+        params = parse_qs(parsed.query)
+        entry_id = params.get("entryId", [""])[0].strip()
+        if not entry_id:
+            self._write_json({"error": "Missing entryId parameter."}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        entry = translation_store.get_entry(entry_id)
+        if not entry:
+            self._write_json({"error": "Translation entry not found."}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        image_file = resolve_uploaded_image_file(entry.get("image"))
+        deleted = translation_store.delete_entry(entry_id)
+        if not deleted:
+            self._write_json({"error": "Translation entry not found."}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        if image_file:
+            image_file.unlink(missing_ok=True)
+
+        self._write_json({"deleted": True, "entryId": entry_id}, status=HTTPStatus.OK)
 
     def _handle_tts(self, parsed):
         params = parse_qs(parsed.query)

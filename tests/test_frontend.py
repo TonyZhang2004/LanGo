@@ -58,6 +58,13 @@ class FrontendSmokeTests(unittest.TestCase):
         self.assertNotIn("handleImageUpload", script)
         self.assertNotIn(".upload-chip", styles)
 
+    def test_frontend_supports_history_deletion(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn('method: "DELETE"', script)
+        self.assertIn("Delete", script)
+        self.assertIn(".delete-button", styles)
+
     def test_frontend_no_longer_contains_ball_and_shoe_demo_seed_rows(self):
         script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
         self.assertNotIn("ball-ar", script)

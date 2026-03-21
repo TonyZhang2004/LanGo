@@ -193,6 +193,18 @@ class TranslationStore:
             ).fetchone()
         return self._serialize_row(row) if row else None
 
+    def get_entry(self, entry_id):
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at
+                FROM translation_entries
+                WHERE id = ?
+                """,
+                (entry_id,),
+            ).fetchone()
+        return self._serialize_row(row) if row else None
+
     def create_entry(self, language_key, english, translated, speech, image, time_label):
         existing = self.find_entry_by_english(language_key, english)
         if existing:

@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from backend.groq_audio_translation import GroqAudioTranslator
-from backend.server import build_uploaded_image_path, resolve_tts_provider, save_uploaded_image
+from backend.server import build_uploaded_image_path, resolve_tts_provider, resolve_uploaded_image_file, save_uploaded_image
 
 
 class TranslatorSupportTests(unittest.TestCase):
@@ -42,6 +42,12 @@ class ServerLogicTests(unittest.TestCase):
                 self.assertTrue(image_path.startswith("./assets/uploads/"))
                 self.assertTrue(file_path.exists())
                 self.assertEqual(file_path.read_bytes(), b"jpg-bytes")
+
+    def test_resolve_uploaded_image_file_returns_frontend_upload_path(self):
+        image_file = resolve_uploaded_image_file("./assets/uploads/pumpkin.jpg")
+
+        self.assertEqual(image_file, Path(__file__).resolve().parent.parent / "frontend" / "assets" / "uploads" / "pumpkin.jpg")
+        self.assertIsNone(resolve_uploaded_image_file("./assets/ball.svg"))
 
 
 if __name__ == "__main__":

@@ -57,7 +57,8 @@ body::before {
 }
 
 .sync-button,
-.audio-button {
+.audio-button,
+.delete-button {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.72);
   box-shadow: var(--card-shadow);
@@ -66,7 +67,8 @@ body::before {
 
 .sync-button:hover,
 .language-picker:hover,
-.audio-button:hover {
+.audio-button:hover,
+.delete-button:hover {
   transform: translateY(-2px);
 }
 
@@ -206,7 +208,7 @@ body::before {
 
 .history-columns {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr) 92px minmax(190px, 220px);
+  grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr) 92px minmax(190px, 220px) 110px;
   gap: 18px;
   margin: 28px 0 16px;
   padding: 0 6px;
@@ -224,7 +226,7 @@ body::before {
 
 .history-card {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr) 92px minmax(190px, 220px);
+  grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr) 92px minmax(190px, 220px) 110px;
   align-items: center;
   gap: 18px;
   padding: 18px;
@@ -289,6 +291,24 @@ body::before {
   border-radius: 999px;
   position: relative;
   cursor: pointer;
+}
+
+.delete-button {
+  padding: 12px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7f2f28;
+}
+
+.delete-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
 }
 
 .audio-button.is-playing {
@@ -385,7 +405,8 @@ body::before {
   }
 
   .audio-button,
-  .timestamp {
+  .timestamp,
+  .delete-button {
     justify-self: start;
   }
 
