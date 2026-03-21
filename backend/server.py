@@ -106,15 +106,25 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             )
             return
 
+        language_key = payload["languageKey"].strip().lower()
+        english = payload["english"].strip()
+        existing_entry = translation_store.find_entry_by_english(language_key, english)
+        if existing_entry:
+            self._write_json(
+                {"entry": existing_entry, "created": False, "dedupedOn": "english"},
+                status=HTTPStatus.OK,
+            )
+            return
+
         entry = translation_store.create_entry(
-            language_key=payload["languageKey"].strip().lower(),
-            english=payload["english"].strip(),
+            language_key=language_key,
+            english=english,
             translated=payload["translated"].strip(),
             speech=payload["speech"].strip(),
             image=payload["image"].strip(),
             time_label=payload["time"].strip(),
         )
-        self._write_json({"entry": entry}, status=HTTPStatus.CREATED)
+        self._write_json({"entry": entry, "created": True}, status=HTTPStatus.CREATED)
 
     def _handle_tts(self, parsed):
         params = parse_qs(parsed.query)
