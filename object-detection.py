@@ -72,7 +72,9 @@ while True:
         tip_y = int(tip.y * h)
 
         # Thumb index
-
+        thumb = hand_landmarks.landmark[4]
+        thumb_x = int(thumb.x * w)
+        thumb_y = int(thumb.y * h)
         # Draw red dot
         #cv2.circle(frame, (tip_x, tip_y), 10, (0, 0, 255), -1)
 
@@ -101,7 +103,7 @@ while True:
             clean_label = label_map.get(label, label)
             if clean_label not in vocab_words: #create image + word if not in vocab list already
                 vocab_words.append(clean_label)
-                filename = f"{clean_label.lower()}.jpg"
+                filename = f"{clean_label.replace(' ', '_').lower()}.jpg"
                 filepath = os.path.join("images", filename)
                 crop = frame[y1:y2, x1:x2]
                 cv2.imwrite(filepath, crop)
