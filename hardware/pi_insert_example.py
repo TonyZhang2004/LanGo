@@ -38,8 +38,8 @@ def insert_entry(entry, server_url=SERVER_URL):
         return response.status, body
 
 def upload_image(entry_id, image_path, server_base=SERVER_BASE):
-    file_path = "./hardware/" + image_path
-    file_path = Path(file_path)
+    # file_path = "./hardware/" + image_path
+    file_path = Path(image_path)
     endpoint = (
         f"{server_base}/api/upload-image?"
         f"entryId={parse.quote(str(entry_id))}&filename={parse.quote(file_path.name)}"
@@ -55,10 +55,10 @@ def upload_image(entry_id, image_path, server_base=SERVER_BASE):
     
 def main():
     entry = {
-        "languageKey": "spanish",
-        "english": "watermelon",
-        "translated": "sandía",
-        "speech": "sandía",
+        "languageKey": "french",
+        "english": "hand",
+        "translated": "main",
+        "speech": "main",
         "image": None,
         "time": current_time_label(),
     }
@@ -83,7 +83,7 @@ def main():
     data = json.loads(body)
     print(data["entry"]["id"])
 
-    image_path = "watermelon.jpg"
+    image_path = "./images/hand.jpg"
     entry_id = data["entry"]["id"]
 
     try:
