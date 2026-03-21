@@ -41,6 +41,8 @@ class FrontendSmokeTests(unittest.TestCase):
         self.assertIn("Sync now", script)
         self.assertNotIn("profile-chip", script)
         self.assertIn(".sync-button", styles)
+        self.assertNotIn('year: "numeric"', script)
+        self.assertIn("formatFullDateTime", script)
 
     def test_frontend_renders_placeholder_when_image_is_missing(self):
         script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
@@ -55,6 +57,13 @@ class FrontendSmokeTests(unittest.TestCase):
         self.assertNotIn("Upload JPG", script)
         self.assertNotIn("handleImageUpload", script)
         self.assertNotIn(".upload-chip", styles)
+
+    def test_frontend_no_longer_contains_ball_and_shoe_demo_seed_rows(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        self.assertNotIn("ball-ar", script)
+        self.assertNotIn("shoe-ar", script)
+        self.assertIn("arabic: []", script)
+        self.assertIn("spanish: []", script)
 
 
 if __name__ == "__main__":

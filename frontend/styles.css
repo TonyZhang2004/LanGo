@@ -206,7 +206,7 @@ body::before {
 
 .history-columns {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr) 92px 88px;
+  grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr) 92px minmax(190px, 220px);
   gap: 18px;
   margin: 28px 0 16px;
   padding: 0 6px;
@@ -224,7 +224,7 @@ body::before {
 
 .history-card {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr) 92px 88px;
+  grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr) 92px minmax(190px, 220px);
   align-items: center;
   gap: 18px;
   padding: 18px;
@@ -333,6 +333,8 @@ body::before {
 .timestamp {
   justify-self: end;
   font-size: 0.85rem;
+  line-height: 1.35;
+  text-align: right;
   color: var(--ink);
 }
 

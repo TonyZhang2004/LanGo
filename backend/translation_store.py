@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT_DIR / "data"
 DB_PATH = DATA_DIR / "lango.db"
+MAX_HISTORY_ENTRIES = 10
 LANGUAGE_LOCALES = {
     "arabic": "ar-SA",
     "chinese": "zh-CN",
@@ -17,7 +18,7 @@ LANGUAGE_LOCALES = {
 }
 
 
-SEED_ENTRIES = {
+DEMO_ENTRIES = {
     "arabic": [
         {"english": "ball", "translated": "كُرَة", "speech": "كُرَة", "image": "./assets/ball.svg", "time": "2:42 PM"},
         {"english": "shoe", "translated": "حِذَاء", "speech": "حِذَاء", "image": "./assets/shoe.svg", "time": "2:45 PM"},
@@ -77,9 +78,8 @@ class TranslationStore:
                 """
             )
             self._migrate_nullable_image_column(connection)
-            count = connection.execute("SELECT COUNT(*) AS total FROM translation_entries").fetchone()["total"]
-            if count == 0:
-                self._seed(connection)
+            self._remove_demo_entries(connection)
+            self._enforce_all_language_limits(connection)
             connection.commit()
 
     def _migrate_nullable_image_column(self, connection):
@@ -115,14 +115,18 @@ class TranslationStore:
         )
         connection.execute("DROP TABLE translation_entries_old")
 
-    def _seed(self, connection):
-        for language_key, entries in SEED_ENTRIES.items():
+    def _remove_demo_entries(self, connection):
+        for language_key, entries in DEMO_ENTRIES.items():
             for entry in entries:
                 connection.execute(
                     """
-                    INSERT INTO translation_entries (
-                        language_key, english, translated, speech, image, time_label
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    DELETE FROM translation_entries
+                    WHERE language_key = ?
+                      AND english = ?
+                      AND translated = ?
+                      AND speech = ?
+                      AND image = ?
+                      AND time_label = ?
                     """,
                     (
                         language_key,
@@ -134,16 +138,43 @@ class TranslationStore:
                     ),
                 )
 
+    def _enforce_all_language_limits(self, connection):
+        rows = connection.execute(
+            """
+            SELECT DISTINCT language_key
+            FROM translation_entries
+            """
+        ).fetchall()
+        for row in rows:
+            self._enforce_language_limit(connection, row["language_key"])
+
+    def _enforce_language_limit(self, connection, language_key):
+        connection.execute(
+            """
+            DELETE FROM translation_entries
+            WHERE language_key = ?
+              AND id IN (
+                  SELECT id
+                  FROM translation_entries
+                  WHERE language_key = ?
+                  ORDER BY id DESC
+                  LIMIT -1 OFFSET ?
+              )
+            """,
+            (language_key, language_key, MAX_HISTORY_ENTRIES),
+        )
+
     def list_entries(self, language_key):
         with closing(self._connect()) as connection:
             rows = connection.execute(
                 """
-                SELECT id, language_key, english, translated, speech, image, time_label
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at
                 FROM translation_entries
                 WHERE language_key = ?
                 ORDER BY id DESC
+                LIMIT ?
                 """,
-                (language_key,),
+                (language_key, MAX_HISTORY_ENTRIES),
             ).fetchall()
         return [self._serialize_row(row) for row in rows]
 
@@ -151,7 +182,7 @@ class TranslationStore:
         with closing(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT id, language_key, english, translated, speech, image, time_label
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at
                 FROM translation_entries
                 WHERE language_key = ?
                   AND lower(trim(english)) = lower(trim(?))
@@ -178,9 +209,10 @@ class TranslationStore:
                 """,
                 (language_key, english, translated, speech, image_value, time_label),
             )
+            self._enforce_language_limit(connection, language_key)
             row = connection.execute(
                 """
-                SELECT id, language_key, english, translated, speech, image, time_label
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at
                 FROM translation_entries
                 WHERE id = ?
                 """,
@@ -198,7 +230,7 @@ class TranslationStore:
             )
             row = connection.execute(
                 """
-                SELECT id, language_key, english, translated, speech, image, time_label
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at
                 FROM translation_entries
                 WHERE id = ?
                 """,
@@ -232,4 +264,5 @@ class TranslationStore:
             "lang": LANGUAGE_LOCALES.get(row["language_key"]),
             "image": row["image"],
             "time": row["time_label"],
+            "createdAt": row["created_at"],
         }

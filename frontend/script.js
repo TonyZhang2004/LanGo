@@ -2,34 +2,13 @@ const { useEffect, useState } = React;
 const h = React.createElement;
 
 const seedTranslations = {
-  arabic: [
-    { id: "ball-ar", english: "ball", translated: "كُرَة", time: "2:42 PM", image: "./assets/ball.svg", speech: "كُرَة", lang: "ar-SA" },
-    { id: "shoe-ar", english: "shoe", translated: "حِذَاء", time: "2:45 PM", image: "./assets/shoe.svg", speech: "حِذَاء", lang: "ar-SA" },
-  ],
-  chinese: [
-    { id: "ball-zh", english: "ball", translated: "球", time: "2:42 PM", image: "./assets/ball.svg", speech: "球", lang: "zh-CN" },
-    { id: "shoe-zh", english: "shoe", translated: "鞋子", time: "2:45 PM", image: "./assets/shoe.svg", speech: "鞋子", lang: "zh-CN" },
-  ],
-  french: [
-    { id: "ball-fr", english: "ball", translated: "balle", time: "2:42 PM", image: "./assets/ball.svg", speech: "balle", lang: "fr-FR" },
-    { id: "shoe-fr", english: "shoe", translated: "chaussure", time: "2:45 PM", image: "./assets/shoe.svg", speech: "chaussure", lang: "fr-FR" },
-  ],
-  japanese: [
-    { id: "ball-ja", english: "ball", translated: "ボール", time: "2:42 PM", image: "./assets/ball.svg", speech: "ボール", lang: "ja-JP" },
-    { id: "shoe-ja", english: "shoe", translated: "くつ", time: "2:45 PM", image: "./assets/shoe.svg", speech: "くつ", lang: "ja-JP" },
-  ],
-  portuguese: [
-    { id: "ball-pt", english: "ball", translated: "bola", time: "2:42 PM", image: "./assets/ball.svg", speech: "bola", lang: "pt-BR" },
-    { id: "shoe-pt", english: "shoe", translated: "sapato", time: "2:45 PM", image: "./assets/shoe.svg", speech: "sapato", lang: "pt-BR" },
-  ],
-  russian: [
-    { id: "ball-ru", english: "ball", translated: "мяч", time: "2:42 PM", image: "./assets/ball.svg", speech: "мяч", lang: "ru-RU" },
-    { id: "shoe-ru", english: "shoe", translated: "ботинок", time: "2:45 PM", image: "./assets/shoe.svg", speech: "ботинок", lang: "ru-RU" },
-  ],
-  spanish: [
-    { id: "ball-es", english: "ball", translated: "bola", time: "2:42 PM", image: "./assets/ball.svg", speech: "bola", lang: "es-ES" },
-    { id: "shoe-es", english: "shoe", translated: "zapato", time: "2:45 PM", image: "./assets/shoe.svg", speech: "zapato", lang: "es-ES" },
-  ],
+  arabic: [],
+  chinese: [],
+  french: [],
+  japanese: [],
+  portuguese: [],
+  russian: [],
+  spanish: [],
 };
 
 const languageNames = {
@@ -53,6 +32,33 @@ const languageLocales = {
 
 const fallbackTranslations = seedTranslations;
 const defaultImage = "./assets/no-image.svg";
+const fullDateTimeFormatter = new Intl.DateTimeFormat([], {
+  month: "long",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function formatFullDateTime(timestamp, fallbackTime) {
+  if (timestamp) {
+    const normalized = String(timestamp).includes("T") ? String(timestamp) : String(timestamp).replace(" ", "T");
+    const parsed = new Date(normalized);
+    if (!Number.isNaN(parsed.getTime())) {
+      return fullDateTimeFormatter.format(parsed);
+    }
+  }
+
+  if (!fallbackTime) {
+    return "Unknown time";
+  }
+
+  const today = new Date();
+  const dateLabel = new Intl.DateTimeFormat([], {
+    month: "long",
+    day: "numeric",
+  }).format(today);
+  return `${dateLabel} ${fallbackTime}`;
+}
 
 function findVoiceForLang(lang) {
   if (!("speechSynthesis" in window)) {
@@ -111,6 +117,7 @@ function speakWithBrowser(text, lang, setPlayingId, entryId, setAudioError) {
 }
 
 function TranslationCard({ entry, isPlaying, onPlay }) {
+  const displayTime = formatFullDateTime(entry.createdAt, entry.time);
   return h(
     "article",
     { className: "history-card" },
@@ -140,7 +147,7 @@ function TranslationCard({ entry, isPlaying, onPlay }) {
       },
       h("span", { className: "audio-icon", "aria-hidden": "true" })
     ),
-    h("time", { className: "timestamp", dateTime: entry.time }, entry.time)
+    h("time", { className: "timestamp", dateTime: entry.createdAt || entry.time }, displayTime)
   );
 }
 
@@ -155,13 +162,7 @@ function App() {
   const [syncNonce, setSyncNonce] = useState(0);
 
   const stampSyncTime = () => {
-    const now = new Date();
-    setLastSyncTime(
-      now.toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    );
+    setLastSyncTime(fullDateTimeFormatter.format(new Date()));
   };
 
   useEffect(() => {
