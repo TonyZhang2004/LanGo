@@ -20,23 +20,18 @@ hands = mp_hands.Hands(
 )
 
 
-# Hand skeleton connections
-HAND_CONNECTIONS = [
-    (0,1),(1,2),(2,3),(3,4),
-    (0,5),(5,6),(6,7),(7,8),
-    (5,9),(9,10),(10,11),(11,12),
-    (9,13),(13,14),(14,15),(15,16),
-    (13,17),(17,18),(18,19),(19,20),
-    (0,17)
-]
-
 # -----------------------
 # YOLO Model
 # -----------------------
 model = YOLO("yolov8s-oiv7.pt")
 
-ignore_classes = ["Building", "Office building"]
-priority_classes = ["Man", "Woman"]
+ignore_classes = ["Building", "Office building", "Clothing"]
+
+label_map = {
+    "Human hand": "Hand",
+    "Human face": "Face",
+    "Footwear": "Shoe",
+}
 
 
 # -----------------------
@@ -56,18 +51,15 @@ while True:
 
     h, w, _ = frame.shape
 
-    yolo_results = model(frame)[0] #YOLO results
-    #frame = yolo_results[0].plot()
-
-
-
      # Convert to RGB for MediaPipe
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     hand_results = hands.process(rgb)
 
-    tip_x, tip_y = 0,0
+    vocab_words = [] # words from detected objects
 
     if hand_results.multi_hand_landmarks:
+        yolo_results = model(frame, verbose=False)[0] #YOLO results
+
         hand_landmarks = hand_results.multi_hand_landmarks[0]
 
         # Index fingertip = landmark 8
@@ -78,59 +70,77 @@ while True:
         # Draw red dot
         cv2.circle(frame, (tip_x, tip_y), 10, (0, 0, 255), -1)
 
-    detected_objs = []
-    for box in yolo_results.boxes:
-        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-        cls = int(box.cls[0])
-        label = model.names[cls]
-        if x1 <= tip_x <= x2 and y1 <= tip_y <= y2: #inside bounding box
-            #add to list of detected 
-            detected_objs.append(box)
+        detected_objs = []
+        
+        for box in yolo_results.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+            cls = int(box.cls[0])
+            label = model.names[cls]
+            if (x1 <= tip_x <= x2 and y1 <= tip_y <= y2) and label not in detected_objs and label not in ignore_classes: #inside bounding box
+                #add to list of detected 
+                detected_objs.append(box)
 
-            # cv2.rectangle(frame,
-            #           (int(x1), int(y1)),
-            #           (int(x2), int(y2)),
-            #           (0, 255, 0), 2)
+        sorted_objs = sorted(
+        detected_objs,
+        key=lambda box: (
+            (box.xyxy[0].cpu().numpy()[2] - box.xyxy[0].cpu().numpy()[0]) *
+            (box.xyxy[0].cpu().numpy()[3] - box.xyxy[0].cpu().numpy()[1])
+        )
+        )
 
-            # cv2.putText(frame, label,
-            #             (int(x1), int(y1) - 5),
-            #             cv2.FONT_HERSHEY_SIMPLEX,
-            #             0.5, (0,255,0), 2)
+        for obj in detected_objs:
+            x1, y1, x2, y2 = obj.xyxy[0].cpu().numpy()
+            cls = int(obj.cls[0])
+            label = model.names[cls]
+            clean_label = label_map.get(label, label)
+
+
+            cv2.rectangle(frame,
+                      (int(x1), int(y1)),
+                      (int(x2), int(y2)),
+                      (0, 255, 0), 2)
+
+            cv2.putText(frame, clean_label,
+                        (int(x1), int(y1) - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0,255,0), 2)
 
     #choose object detected that finger is closest to center
-    closest_obj = None
-    smallest_area = 1000000
-    for obj in detected_objs:
-        x1, y1, x2, y2 = obj.xyxy[0].cpu().numpy()
-        cls = int(obj.cls[0])
-        label = model.names[cls]
-        cx = (x1 + x2) / 2
-        cy = (y1 + y2) / 2
-        distance = math.hypot(tip_x - cx, tip_y - cy)
-        area = (x2 - x1) * (y2 - y1)
+    # closest_obj = None
+    # smallest_area = 1000000
+    # for obj in detected_objs:
+    #     x1, y1, x2, y2 = obj.xyxy[0].cpu().numpy()
+    #     cls = int(obj.cls[0])
+    #     label = model.names[cls]
+    #     cx = (x1 + x2) / 2
+    #     cy = (y1 + y2) / 2
+    #     distance = math.hypot(tip_x - cx, tip_y - cy)
+    #     area = (x2 - x1) * (y2 - y1)
 
-        # take closest to center
-        #if (closest_dist > distance) and label not in ignore_classes :
-        if closest_obj not in priority_classes and obj in priority_classes:
-            if smallest_area > area and label not in ignore_classes:
-                # make sure to choose smallest area
-                closest_obj = obj
-                smallest_area = area
+    #     # take closest to center
+    #     #if (closest_dist > distance) and label not in ignore_classes :
+    #     if smallest_area > area and label not in ignore_classes:
+    #         # make sure to choose smallest area
+    #         closest_obj = obj
+    #         smallest_area = area
 
     #print out box
-    if closest_obj:
-        x1, y1, x2, y2 = closest_obj.xyxy[0].cpu().numpy()
-        cls = int(closest_obj.cls[0])
-        label = model.names[cls]
+    # if closest_obj:
+    #     x1, y1, x2, y2 = closest_obj.xyxy[0].cpu().numpy()
+    #     cls = int(closest_obj.cls[0])
+    #     label = model.names[cls]
 
-        cv2.rectangle(frame,
-                    (int(x1), int(y1)),
-                    (int(x2), int(y2)),
-                    (0, 255, 0), 2)
-        cv2.putText(frame, label,
-                    (int(x1), int(y1) - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5, (0,255,0), 2)
+    #     cv2.rectangle(frame,
+    #                 (int(x1), int(y1)),
+    #                 (int(x2), int(y2)),
+    #                 (0, 255, 0), 2)
+    #     cv2.putText(frame, label,
+    #                 (int(x1), int(y1) - 5),
+    #                 cv2.FONT_HERSHEY_SIMPLEX,
+    #                 0.5, (0,255,0), 2)
+
+    #return all objects detected in bounds
+    
 
 
     cv2.imshow("LanGo", frame)
