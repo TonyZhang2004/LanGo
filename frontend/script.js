@@ -110,17 +110,25 @@ function speakWithBrowser(text, lang, setPlayingId, entryId, setAudioError) {
 }
 
 function TranslationCard({ entry, isPlaying, onPlay, onUpload }) {
+  const hasImage = Boolean(entry.image);
   return h(
     "article",
     { className: "history-card" },
     h(
       "div",
       { className: "thumb-wrap" },
-      h("img", {
-        className: "thumb",
-        src: entry.image,
-        alt: `${entry.english} translation item`,
-      }),
+      hasImage
+        ? h("img", {
+            className: "thumb",
+            src: entry.image,
+            alt: `${entry.english} translation item`,
+          })
+        : h(
+            "div",
+            { className: "thumb-fallback", "aria-label": `${entry.english} translation item without image` },
+            h("span", { className: "thumb-fallback-mark", "aria-hidden": "true" }, entry.english.slice(0, 1).toUpperCase()),
+            h("span", { className: "thumb-fallback-text" }, "No image yet")
+          ),
       h(
         "label",
         { className: "upload-chip" },

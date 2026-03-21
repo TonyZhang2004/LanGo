@@ -42,6 +42,13 @@ class FrontendSmokeTests(unittest.TestCase):
         self.assertNotIn("profile-chip", script)
         self.assertIn(".sync-button", styles)
 
+    def test_frontend_renders_placeholder_when_image_is_missing(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("No image yet", script)
+        self.assertIn("thumb-fallback", script)
+        self.assertIn(".thumb-fallback", styles)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -251,6 +251,40 @@ body::before {
   display: block;
 }
 
+.thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(215, 255, 92, 0.3), transparent 60%),
+    linear-gradient(145deg, #fff9ed, #efe4ca);
+}
+
+.thumb-fallback-mark {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(21, 23, 25, 0.08);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.thumb-fallback-text {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .translation-cell {
   display: flex;
   align-items: center;

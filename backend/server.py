@@ -12,7 +12,7 @@ from backend.translation_store import TranslationStore
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
-HOST = "127.0.0.1"
+HOST = os.environ.get("HOST", "127.0.0.1").strip() or "127.0.0.1"
 PORT = int(os.environ.get("PORT", "8000"))
 translator = GroqAudioTranslator()
 translation_store = TranslationStore()
@@ -97,7 +97,7 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             self._write_json({"error": "Request body must be valid JSON."}, status=HTTPStatus.BAD_REQUEST)
             return
 
-        required_fields = ["languageKey", "english", "translated", "speech", "image", "time"]
+        required_fields = ["languageKey", "english", "translated", "speech", "time"]
         missing = [field for field in required_fields if not payload.get(field)]
         if missing:
             self._write_json(
@@ -121,7 +121,7 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             english=english,
             translated=payload["translated"].strip(),
             speech=payload["speech"].strip(),
-            image=payload["image"].strip(),
+            image=payload.get("image"),
             time_label=payload["time"].strip(),
         )
         self._write_json({"entry": entry, "created": True}, status=HTTPStatus.CREATED)

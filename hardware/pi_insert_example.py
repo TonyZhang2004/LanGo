@@ -4,6 +4,8 @@ from datetime import datetime
 from urllib import error, request
 
 
+# Default is same-machine localhost. For another device on the same network,
+# pass something like http://192.168.1.25:8000/api/history as argv[1].
 SERVER_URL = "http://127.0.0.1:8000/api/history"
 
 
@@ -17,7 +19,7 @@ def build_entry():
         "english": "ball",
         "translated": "ボール",
         "speech": "ボール",
-        "image": "./assets/captures/ball-001.jpg",
+        "image": None,
         "time": current_time_label(),
     }
 
@@ -47,6 +49,7 @@ def main():
     except error.URLError as exc:
         print("Could not reach the LanGo server.")
         print(f"Checked URL: {server_url}")
+        print("If this script is running on another computer, do not use 127.0.0.1 unless the server is running on that same computer.")
         print(str(exc.reason))
         raise SystemExit(1) from exc
 
