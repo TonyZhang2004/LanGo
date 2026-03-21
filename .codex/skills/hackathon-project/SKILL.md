@@ -29,6 +29,7 @@ Treat that file as the current project brief unless the user overrides it in the
 - Prefer Python-first implementation advice unless the user asks for a different stack
 - Include a Figma step when discussing product definition, UX, or demo prep
 - Treat the headset interaction loop as the primary product direction unless the user changes it
+- Before saying work is done, run the relevant local tests and make sure they pass
 
 ## Output Priorities
 

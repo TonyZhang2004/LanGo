@@ -85,6 +85,13 @@ body::before {
   color: var(--muted);
 }
 
+.audio-error {
+  margin: 0;
+  color: #8e3b31;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .brand-block h1,
 .section-heading h2 {
   margin: 0;
