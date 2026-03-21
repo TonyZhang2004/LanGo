@@ -5,7 +5,9 @@ from ultralytics import YOLO
 import math
 import os
 
-
+# as hand is detected, will first check for pinching gesture. 
+# if pinching gesture is detected: save first x, y then save x,y when pinch gesture is let go
+# if not, then run YOLO model and do pointing detection
 
 # -----------------------
 # MediaPipe setup
@@ -32,8 +34,9 @@ label_map = {
     "Human hand": "Hand",
     "Human face": "Face",
     "Footwear": "Shoe",
-}
+    "Desk": "Table",
 
+}
 
 # -----------------------
 # Webcam
@@ -68,6 +71,8 @@ while True:
         tip_x = int(tip.x * w)
         tip_y = int(tip.y * h)
 
+        # Thumb index
+
         # Draw red dot
         #cv2.circle(frame, (tip_x, tip_y), 10, (0, 0, 255), -1)
 
@@ -94,7 +99,7 @@ while True:
             cls = int(obj.cls[0])
             label = model.names[cls]
             clean_label = label_map.get(label, label)
-            if clean_label not in vocab_words:
+            if clean_label not in vocab_words: #create image + word if not in vocab list already
                 vocab_words.append(clean_label)
                 filename = f"{clean_label.lower()}.jpg"
                 filepath = os.path.join("images", filename)
