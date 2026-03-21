@@ -23,6 +23,17 @@ class FrontendSmokeTests(unittest.TestCase):
         self.assertNotIn("text/babel", html)
         self.assertNotIn("@babel/standalone", html)
 
+    def test_frontend_uses_browser_speech_instead_of_backend_tts_fetch(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        self.assertIn("SpeechSynthesisUtterance", script)
+        self.assertNotIn("/api/tts", script)
+        self.assertNotIn("Groq TTS", script)
+
+    def test_frontend_ignores_interrupted_browser_tts_errors(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        self.assertIn('event && event.error === "interrupted"', script)
+        self.assertIn("let started = false;", script)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,14 +1,10 @@
-const { useEffect, useRef, useState } = React;
+const { useEffect, useState } = React;
 const h = React.createElement;
 
 const seedTranslations = {
   arabic: [
     { id: "ball-ar", english: "ball", translated: "كُرَة", time: "2:42 PM", image: "./assets/ball.svg", speech: "كُرَة", lang: "ar-SA" },
     { id: "shoe-ar", english: "shoe", translated: "حِذَاء", time: "2:45 PM", image: "./assets/shoe.svg", speech: "حِذَاء", lang: "ar-SA" },
-  ],
-  bengali: [
-    { id: "ball-bn", english: "ball", translated: "বল", time: "2:42 PM", image: "./assets/ball.svg", speech: "বল", lang: "bn-BD" },
-    { id: "shoe-bn", english: "shoe", translated: "জুতা", time: "2:45 PM", image: "./assets/shoe.svg", speech: "জুতা", lang: "bn-BD" },
   ],
   chinese: [
     { id: "ball-zh", english: "ball", translated: "球", time: "2:42 PM", image: "./assets/ball.svg", speech: "球", lang: "zh-CN" },
@@ -17,14 +13,6 @@ const seedTranslations = {
   french: [
     { id: "ball-fr", english: "ball", translated: "balle", time: "2:42 PM", image: "./assets/ball.svg", speech: "balle", lang: "fr-FR" },
     { id: "shoe-fr", english: "shoe", translated: "chaussure", time: "2:45 PM", image: "./assets/shoe.svg", speech: "chaussure", lang: "fr-FR" },
-  ],
-  hindi: [
-    { id: "ball-hi", english: "ball", translated: "गेंद", time: "2:42 PM", image: "./assets/ball.svg", speech: "गेंद", lang: "hi-IN" },
-    { id: "shoe-hi", english: "shoe", translated: "जूता", time: "2:45 PM", image: "./assets/shoe.svg", speech: "जूता", lang: "hi-IN" },
-  ],
-  indonesian: [
-    { id: "ball-id", english: "ball", translated: "bola", time: "2:42 PM", image: "./assets/ball.svg", speech: "bola", lang: "id-ID" },
-    { id: "shoe-id", english: "shoe", translated: "sepatu", time: "2:45 PM", image: "./assets/shoe.svg", speech: "sepatu", lang: "id-ID" },
   ],
   japanese: [
     { id: "ball-ja", english: "ball", translated: "ボール", time: "2:42 PM", image: "./assets/ball.svg", speech: "ボール", lang: "ja-JP" },
@@ -46,11 +34,8 @@ const seedTranslations = {
 
 const languageNames = {
   arabic: "Arabic",
-  bengali: "Bengali",
   chinese: "Mandarin Chinese",
   french: "French",
-  hindi: "Hindi",
-  indonesian: "Indonesian",
   japanese: "Japanese",
   portuguese: "Portuguese",
   russian: "Russian",
@@ -58,11 +43,8 @@ const languageNames = {
 };
 const languageLocales = {
   arabic: "ar-SA",
-  bengali: "bn-BD",
   chinese: "zh-CN",
   french: "fr-FR",
-  hindi: "hi-IN",
-  indonesian: "id-ID",
   japanese: "ja-JP",
   portuguese: "pt-BR",
   russian: "ru-RU",
@@ -70,7 +52,6 @@ const languageLocales = {
 };
 
 const fallbackTranslations = seedTranslations;
-const groqTtsLanguages = new Set(["arabic"]);
 
 function findVoiceForLang(lang) {
   if (!("speechSynthesis" in window)) {
@@ -103,14 +84,25 @@ function speakWithBrowser(text, lang, setPlayingId, entryId, setAudioError) {
 
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
+  let started = false;
   utterance.lang = lang;
   utterance.voice = matchingVoice;
   utterance.rate = 0.92;
   utterance.pitch = 1;
-  utterance.onstart = () => setPlayingId(entryId);
+  utterance.onstart = () => {
+    started = true;
+    setAudioError("");
+    setPlayingId(entryId);
+  };
   utterance.onend = () => setPlayingId(null);
-  utterance.onerror = () => {
+  utterance.onerror = (event) => {
     setPlayingId(null);
+    if (event && event.error === "interrupted") {
+      return;
+    }
+    if (started) {
+      return;
+    }
     setAudioError("Could not play browser audio.");
   };
   window.speechSynthesis.speak(utterance);
@@ -177,22 +169,12 @@ function App() {
   const [audioError, setAudioError] = useState("");
   const [historyError, setHistoryError] = useState("");
   const [voiceNotice, setVoiceNotice] = useState("");
-  const audioRef = useRef(null);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      setConnectionState("Web app synced with Raspberry Pi");
+      setConnectionState("Web app synced with local system voices");
     }, 1200);
     return () => window.clearTimeout(timeoutId);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
   }, []);
 
   useEffect(() => {
@@ -202,11 +184,6 @@ function App() {
     }
 
     const updateVoiceNotice = () => {
-      if (groqTtsLanguages.has(selectedLanguage)) {
-        setVoiceNotice("");
-        return;
-      }
-
       const currentEntries = translationsByLanguage[selectedLanguage] || fallbackTranslations[selectedLanguage] || [];
       const sampleEntry = currentEntries[0];
       if (!sampleEntry) {
@@ -221,7 +198,7 @@ function App() {
       } else {
         setVoiceNotice(
           `${languageNames[selectedLanguage]} audio needs a local browser/system voice. ` +
-          `Groq TTS currently only supports English and Arabic, so ${languageNames[selectedLanguage]} falls back to your installed device voice.`
+          `Install a ${languageNames[selectedLanguage]} voice in your OS settings to enable playback.`
         );
       }
     };
@@ -281,89 +258,16 @@ function App() {
 
   const handlePlayAudio = async (entry) => {
     setAudioError("");
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    window.speechSynthesis?.cancel();
 
     setPlayingId(entry.id);
-
-    if (!groqTtsLanguages.has(selectedLanguage)) {
-      speakWithBrowser(
-        entry.speech,
-        entry.lang || languageLocales[selectedLanguage],
-        setPlayingId,
-        entry.id,
-        setAudioError
-      );
-      return;
-    }
-
-    try {
-      const params = new URLSearchParams({
-        text: entry.speech,
-        language: selectedLanguage,
-      });
-      const response = await fetch(`/api/tts?${params.toString()}`);
-
-      if (!response.ok) {
-        let fallback = false;
-        let message = `Audio request failed with status ${response.status}`;
-        try {
-          const payload = await response.json();
-          if (payload.details) {
-            message = payload.details;
-          } else if (payload.error) {
-            message = payload.error;
-          }
-          if (payload.fallback === "browser") {
-            fallback = true;
-          }
-        } catch (_error) {
-          // Keep fallback status if body is not JSON.
-        }
-        if (fallback) {
-          setPlayingId(null);
-          speakWithBrowser(
-            entry.speech,
-            entry.lang || languageLocales[selectedLanguage],
-            setPlayingId,
-            entry.id,
-            setAudioError
-          );
-          return;
-        }
-        throw new Error(message);
-      }
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        if (audioRef.current === audio) {
-          audioRef.current = null;
-        }
-        setPlayingId(null);
-      };
-
-      audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl);
-        if (audioRef.current === audio) {
-          audioRef.current = null;
-        }
-        setPlayingId(null);
-        setAudioError("Could not play backend audio.");
-      };
-
-      await audio.play();
-    } catch (error) {
-      setPlayingId(null);
-      setAudioError(error.message || "Could not load Groq audio from the backend.");
-    }
+    speakWithBrowser(
+      entry.speech,
+      entry.lang || languageLocales[selectedLanguage],
+      setPlayingId,
+      entry.id,
+      setAudioError
+    );
   };
 
   return h(

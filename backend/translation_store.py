@@ -8,11 +8,8 @@ DATA_DIR = ROOT_DIR / "data"
 DB_PATH = DATA_DIR / "lango.db"
 LANGUAGE_LOCALES = {
     "arabic": "ar-SA",
-    "bengali": "bn-BD",
     "chinese": "zh-CN",
     "french": "fr-FR",
-    "hindi": "hi-IN",
-    "indonesian": "id-ID",
     "japanese": "ja-JP",
     "portuguese": "pt-BR",
     "russian": "ru-RU",
@@ -25,10 +22,6 @@ SEED_ENTRIES = {
         {"english": "ball", "translated": "كُرَة", "speech": "كُرَة", "image": "./assets/ball.svg", "time": "2:42 PM"},
         {"english": "shoe", "translated": "حِذَاء", "speech": "حِذَاء", "image": "./assets/shoe.svg", "time": "2:45 PM"},
     ],
-    "bengali": [
-        {"english": "ball", "translated": "বল", "speech": "বল", "image": "./assets/ball.svg", "time": "2:42 PM"},
-        {"english": "shoe", "translated": "জুতা", "speech": "জুতা", "image": "./assets/shoe.svg", "time": "2:45 PM"},
-    ],
     "chinese": [
         {"english": "ball", "translated": "球", "speech": "球", "image": "./assets/ball.svg", "time": "2:42 PM"},
         {"english": "shoe", "translated": "鞋子", "speech": "鞋子", "image": "./assets/shoe.svg", "time": "2:45 PM"},
@@ -36,14 +29,6 @@ SEED_ENTRIES = {
     "french": [
         {"english": "ball", "translated": "balle", "speech": "balle", "image": "./assets/ball.svg", "time": "2:42 PM"},
         {"english": "shoe", "translated": "chaussure", "speech": "chaussure", "image": "./assets/shoe.svg", "time": "2:45 PM"},
-    ],
-    "hindi": [
-        {"english": "ball", "translated": "गेंद", "speech": "गेंद", "image": "./assets/ball.svg", "time": "2:42 PM"},
-        {"english": "shoe", "translated": "जूता", "speech": "जूता", "image": "./assets/shoe.svg", "time": "2:45 PM"},
-    ],
-    "indonesian": [
-        {"english": "ball", "translated": "bola", "speech": "bola", "image": "./assets/ball.svg", "time": "2:42 PM"},
-        {"english": "shoe", "translated": "sepatu", "speech": "sepatu", "image": "./assets/shoe.svg", "time": "2:45 PM"},
     ],
     "japanese": [
         {"english": "ball", "translated": "ボール", "speech": "ボール", "image": "./assets/ball.svg", "time": "2:42 PM"},
