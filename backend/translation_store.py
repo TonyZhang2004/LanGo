@@ -70,16 +70,50 @@ class TranslationStore:
                     english TEXT NOT NULL,
                     translated TEXT NOT NULL,
                     speech TEXT NOT NULL,
-                    image TEXT NOT NULL,
+                    image TEXT,
                     time_label TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            self._migrate_nullable_image_column(connection)
             count = connection.execute("SELECT COUNT(*) AS total FROM translation_entries").fetchone()["total"]
             if count == 0:
                 self._seed(connection)
             connection.commit()
+
+    def _migrate_nullable_image_column(self, connection):
+        columns = connection.execute("PRAGMA table_info(translation_entries)").fetchall()
+        image_column = next((column for column in columns if column["name"] == "image"), None)
+        if not image_column or image_column["notnull"] == 0:
+            return
+
+        connection.execute("ALTER TABLE translation_entries RENAME TO translation_entries_old")
+        connection.execute(
+            """
+            CREATE TABLE translation_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                language_key TEXT NOT NULL,
+                english TEXT NOT NULL,
+                translated TEXT NOT NULL,
+                speech TEXT NOT NULL,
+                image TEXT,
+                time_label TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO translation_entries (
+                id, language_key, english, translated, speech, image, time_label, created_at
+            )
+            SELECT
+                id, language_key, english, translated, speech, image, time_label, created_at
+            FROM translation_entries_old
+            """
+        )
+        connection.execute("DROP TABLE translation_entries_old")
 
     def _seed(self, connection):
         for language_key, entries in SEED_ENTRIES.items():
@@ -113,7 +147,28 @@ class TranslationStore:
             ).fetchall()
         return [self._serialize_row(row) for row in rows]
 
+    def find_entry_by_english(self, language_key, english):
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT id, language_key, english, translated, speech, image, time_label
+                FROM translation_entries
+                WHERE language_key = ?
+                  AND lower(trim(english)) = lower(trim(?))
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (language_key, english),
+            ).fetchone()
+        return self._serialize_row(row) if row else None
+
     def create_entry(self, language_key, english, translated, speech, image, time_label):
+        existing = self.find_entry_by_english(language_key, english)
+        if existing:
+            return existing
+
+        image_value = self._normalize_image(image)
+
         with closing(self._connect()) as connection:
             cursor = connection.execute(
                 """
@@ -121,7 +176,7 @@ class TranslationStore:
                     language_key, english, translated, speech, image, time_label
                 ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (language_key, english, translated, speech, image, time_label),
+                (language_key, english, translated, speech, image_value, time_label),
             )
             row = connection.execute(
                 """
@@ -135,10 +190,11 @@ class TranslationStore:
         return self._serialize_row(row)
 
     def update_entry_image(self, entry_id, image):
+        image_value = self._normalize_image(image)
         with closing(self._connect()) as connection:
             connection.execute(
                 "UPDATE translation_entries SET image = ? WHERE id = ?",
-                (image, entry_id),
+                (image_value, entry_id),
             )
             row = connection.execute(
                 """
@@ -159,6 +215,12 @@ class TranslationStore:
             )
             connection.commit()
         return cursor.rowcount > 0
+
+    def _normalize_image(self, image):
+        if image is None:
+            return None
+        image_text = str(image).strip()
+        return image_text or None
 
     def _serialize_row(self, row):
         return {

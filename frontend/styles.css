@@ -251,6 +251,14 @@ body::before {
   display: block;
 }
 
+.thumb.is-placeholder {
+  object-fit: contain;
+  padding: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(215, 255, 92, 0.3), transparent 60%),
+    linear-gradient(145deg, #fff9ed, #efe4ca);
+}
+
 .translation-cell {
   display: flex;
   align-items: center;
@@ -326,30 +334,6 @@ body::before {
   justify-self: end;
   font-size: 0.85rem;
   color: var(--ink);
-}
-
-.upload-chip {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--ink);
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-align: center;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.upload-input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
 }
 
 .sr-only {

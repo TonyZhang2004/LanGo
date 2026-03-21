@@ -42,6 +42,20 @@ class FrontendSmokeTests(unittest.TestCase):
         self.assertNotIn("profile-chip", script)
         self.assertIn(".sync-button", styles)
 
+    def test_frontend_renders_placeholder_when_image_is_missing(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("./assets/no-image.svg", script)
+        self.assertIn("thumb is-placeholder", script)
+        self.assertIn(".thumb.is-placeholder", styles)
+
+    def test_frontend_disables_manual_upload_controls(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")
+        self.assertNotIn("Upload JPG", script)
+        self.assertNotIn("handleImageUpload", script)
+        self.assertNotIn(".upload-chip", styles)
+
 
 if __name__ == "__main__":
     unittest.main()

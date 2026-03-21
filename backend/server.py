@@ -1,10 +1,12 @@
 import json
 import mimetypes
 import os
+import re
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
 
 from backend.groq_audio_translation import GroqAudioTranslator
 from backend.translation_store import TranslationStore
@@ -12,7 +14,8 @@ from backend.translation_store import TranslationStore
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
-HOST = "127.0.0.1"
+UPLOADS_DIR = FRONTEND_DIR / "assets" / "uploads"
+HOST = os.environ.get("HOST", "127.0.0.1").strip() or "127.0.0.1"
 PORT = int(os.environ.get("PORT", "8000"))
 translator = GroqAudioTranslator()
 translation_store = TranslationStore()
@@ -48,6 +51,23 @@ def resolve_tts_provider(language_key):
     }
 
 
+def build_uploaded_image_path(entry_id, filename):
+    original_name = Path(filename or "capture.jpg").name
+    stem = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(original_name).stem).strip("-") or "capture"
+    suffix = Path(original_name).suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png"}:
+        suffix = ".jpg"
+    final_name = f"{entry_id}-{stem}-{uuid4().hex[:8]}{suffix}"
+    return f"./assets/uploads/{final_name}", UPLOADS_DIR / final_name
+
+
+def save_uploaded_image(entry_id, filename, payload_bytes):
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    image_path, file_path = build_uploaded_image_path(entry_id, filename)
+    file_path.write_bytes(payload_bytes)
+    return image_path, file_path
+
+
 class LanGoHandler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         parsed = urlparse(path)
@@ -77,6 +97,9 @@ class LanGoHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/history":
             self._handle_history_post()
             return
+        if parsed.path == "/api/upload-image":
+            self._handle_upload_image(parsed)
+            return
         self._write_json({"error": "Not found."}, status=HTTPStatus.NOT_FOUND)
 
     def _handle_history_get(self, parsed):
@@ -97,7 +120,7 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             self._write_json({"error": "Request body must be valid JSON."}, status=HTTPStatus.BAD_REQUEST)
             return
 
-        required_fields = ["languageKey", "english", "translated", "speech", "image", "time"]
+        required_fields = ["languageKey", "english", "translated", "speech", "time"]
         missing = [field for field in required_fields if not payload.get(field)]
         if missing:
             self._write_json(
@@ -106,15 +129,48 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             )
             return
 
+        language_key = payload["languageKey"].strip().lower()
+        english = payload["english"].strip()
+        existing_entry = translation_store.find_entry_by_english(language_key, english)
+        if existing_entry:
+            self._write_json(
+                {"entry": existing_entry, "created": False, "dedupedOn": "english"},
+                status=HTTPStatus.OK,
+            )
+            return
+
         entry = translation_store.create_entry(
-            language_key=payload["languageKey"].strip().lower(),
-            english=payload["english"].strip(),
+            language_key=language_key,
+            english=english,
             translated=payload["translated"].strip(),
             speech=payload["speech"].strip(),
-            image=payload["image"].strip(),
+            image=payload.get("image"),
             time_label=payload["time"].strip(),
         )
-        self._write_json({"entry": entry}, status=HTTPStatus.CREATED)
+        self._write_json({"entry": entry, "created": True}, status=HTTPStatus.CREATED)
+
+    def _handle_upload_image(self, parsed):
+        params = parse_qs(parsed.query)
+        entry_id = params.get("entryId", [""])[0].strip()
+        filename = params.get("filename", ["capture.jpg"])[0].strip()
+        content_length = int(self.headers.get("Content-Length", "0"))
+
+        if not entry_id:
+            self._write_json({"error": "Missing entryId parameter."}, status=HTTPStatus.BAD_REQUEST)
+            return
+        if content_length <= 0:
+            self._write_json({"error": "Missing image body."}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        payload_bytes = self.rfile.read(content_length)
+        image_path, file_path = save_uploaded_image(entry_id, filename, payload_bytes)
+        entry = translation_store.update_entry_image(entry_id, image_path)
+        if not entry:
+            file_path.unlink(missing_ok=True)
+            self._write_json({"error": "Translation entry not found."}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        self._write_json({"entry": entry, "image": image_path}, status=HTTPStatus.OK)
 
     def _handle_tts(self, parsed):
         params = parse_qs(parsed.query)
