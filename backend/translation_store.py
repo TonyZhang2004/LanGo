@@ -13,7 +13,6 @@ LANGUAGE_LOCALES = {
     "chinese": "zh-CN",
     "french": "fr-FR",
     "japanese": "ja-JP",
-    "portuguese": "pt-BR",
     "russian": "ru-RU",
     "spanish": "es-ES",
 }
@@ -35,10 +34,6 @@ DEMO_ENTRIES = {
     "japanese": [
         {"english": "ball", "translated": "ボール", "speech": "ボール", "image": "./assets/ball.svg", "time": "2:42 PM"},
         {"english": "shoe", "translated": "くつ", "speech": "くつ", "image": "./assets/shoe.svg", "time": "2:45 PM"},
-    ],
-    "portuguese": [
-        {"english": "ball", "translated": "bola", "speech": "bola", "image": "./assets/ball.svg", "time": "2:42 PM"},
-        {"english": "shoe", "translated": "sapato", "speech": "sapato", "image": "./assets/shoe.svg", "time": "2:45 PM"},
     ],
     "russian": [
         {"english": "ball", "translated": "мяч", "speech": "мяч", "image": "./assets/ball.svg", "time": "2:42 PM"},

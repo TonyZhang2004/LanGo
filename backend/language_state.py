@@ -12,7 +12,6 @@ SUPPORTED_LANGUAGES = {
     "chinese": {"label": "Mandarin Chinese", "locale": "zh-CN"},
     "french": {"label": "French", "locale": "fr-FR"},
     "japanese": {"label": "Japanese", "locale": "ja-JP"},
-    "portuguese": {"label": "Portuguese", "locale": "pt-BR"},
     "russian": {"label": "Russian", "locale": "ru-RU"},
     "spanish": {"label": "Spanish", "locale": "es-ES"},
 }

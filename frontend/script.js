@@ -6,7 +6,6 @@ const seedTranslations = {
   chinese: [],
   french: [],
   japanese: [],
-  portuguese: [],
   russian: [],
   spanish: [],
 };
@@ -16,7 +15,6 @@ const languageNames = {
   chinese: "Mandarin Chinese",
   french: "French",
   japanese: "Japanese",
-  portuguese: "Portuguese",
   russian: "Russian",
   spanish: "Spanish",
 };
@@ -25,7 +23,6 @@ const languageLocales = {
   chinese: "zh-CN",
   french: "fr-FR",
   japanese: "ja-JP",
-  portuguese: "pt-BR",
   russian: "ru-RU",
   spanish: "es-ES",
 };

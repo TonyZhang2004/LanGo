@@ -15,7 +15,7 @@ class TranslationStoreDatabaseTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_new_store_starts_without_demo_entries(self):
-        for language_key in ("arabic", "chinese", "french", "japanese", "portuguese", "russian", "spanish"):
+        for language_key in ("arabic", "chinese", "french", "japanese", "russian", "spanish"):
             self.assertEqual(self.store.list_entries(language_key), [])
 
     def test_create_entry_inserts_and_returns_translation_entry(self):
@@ -82,15 +82,15 @@ class TranslationStoreDatabaseTests(unittest.TestCase):
 
     def test_create_entry_allows_none_image(self):
         created = self.store.create_entry(
-            "portuguese",
+            "russian",
             english="apple",
-            translated="maca",
-            speech="maca",
+            translated="яблоко",
+            speech="яблоко",
             image=None,
             time_label="3:18 PM",
         )
 
-        entries = self.store.list_entries("portuguese")
+        entries = self.store.list_entries("russian")
 
         self.assertIsNone(created["image"])
         self.assertEqual(entries[0]["id"], created["id"])

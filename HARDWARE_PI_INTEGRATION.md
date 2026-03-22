@@ -84,6 +84,7 @@ Use this when YOLO has identified an object and you want LanGo to create a pendi
 
 Arguments:
 
+- `language_key`: one of `arabic`, `chinese`, `french`, `japanese`, `russian`, `spanish`
 - `english`: detected English label, for example `apple`, `shoe`, `bottle`
 - `image`: optional frontend-served image path such as `./assets/captures/apple-123.jpg`
 - `language_key`: optional explicit override. If omitted, the backend uses the currently selected device language.

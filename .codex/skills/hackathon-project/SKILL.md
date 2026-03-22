@@ -26,6 +26,7 @@ Treat that file as the current project brief unless the user overrides it in the
 - Keep answers practical and execution-focused
 - Prefer concepts that can be prototyped quickly for a demo
 - When proposing solutions, cover both the hardware side and the frontend/user experience side
+- Treat UX design quality as part of the implementation bar: check that each panel looks intentional, visually aligned, and that controls or sections do not overlap or interfere with each other
 - Prefer Python-first implementation advice unless the user asks for a different stack
 - Include a Figma step when discussing product definition, UX, or demo prep
 - Treat the headset interaction loop as the primary product direction unless the user changes it
