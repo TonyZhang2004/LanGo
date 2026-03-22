@@ -52,6 +52,13 @@ TOUCH_FONT = ("Avenir Next", 24, "bold")
 TOUCH_FONT_SMALL = ("Avenir Next", 22, "bold")
 CHIP_TITLE_FONT = ("Avenir Next", 20, "bold")
 CHIP_SUBTITLE_FONT = ("Avenir Next", 14)
+GEAR_ICON = "\u2699"
+HOME_ICON = "\u2302"
+SWITCHER_BAR_RELWIDTH = 0.76
+SWITCHER_BAR_HEIGHT = 104
+SWITCHER_BUTTON_WIDTH = 170
+SWITCHER_BUTTON_HEIGHT = 80
+MODE_TILE_SIZE = 180
 
 
 if tk is not None:
@@ -375,6 +382,10 @@ def format_main_message(mode_key, selected_pending, latest_entry):
     return "point to start translating"
 
 
+def navigation_icon(show_settings):
+    return HOME_ICON if show_settings else GEAR_ICON
+
+
 class LanGoPiApp:
     def __init__(self, root=None, server_base=SERVER_BASE, poll_ms=DEFAULT_POLL_MS):
         if tk is None or ttk is None:
@@ -509,7 +520,7 @@ class LanGoPiApp:
         stage.pack(fill="both", expand=True)
         surface = stage.content
 
-        self._add_gear_button(surface).place(relx=0.97, rely=0.06, anchor="ne")
+        self._add_nav_button(surface, navigation_icon(False)).place(relx=0.97, rely=0.06, anchor="ne")
 
         main_message = format_main_message(
             self.current_mode,
@@ -685,7 +696,7 @@ class LanGoPiApp:
         stage.pack(fill="both", expand=True)
         surface = stage.content
 
-        self._add_gear_button(surface).place(relx=0.97, rely=0.06, anchor="ne")
+        self._add_nav_button(surface, navigation_icon(True)).place(relx=0.97, rely=0.06, anchor="ne")
 
         slider = RoundedPanel(
             surface,
@@ -693,14 +704,26 @@ class LanGoPiApp:
             border=THEME["line"],
             radius=32,
             padding=8,
-            width=490,
-            height=92,
+            height=SWITCHER_BAR_HEIGHT,
         )
-        slider.place(relx=0.5, rely=0.08, anchor="n")
+        slider.place(relx=0.5, rely=0.08, anchor="n", relwidth=SWITCHER_BAR_RELWIDTH)
 
         slider.content.configure(bg=THEME["surface_alt"])
-        self._make_slider_button(slider.content, "Language", "language").pack(side="left", padx=(0, 10))
-        self._make_slider_button(slider.content, "Mode", "mode").pack(side="left")
+        slider.content.grid_columnconfigure(0, weight=1, uniform="settings-switch")
+        slider.content.grid_columnconfigure(1, weight=1, uniform="settings-switch")
+        slider.content.grid_rowconfigure(0, weight=1)
+        self._make_slider_button(slider.content, "Language", "language").grid(
+            row=0,
+            column=0,
+            padx=(0, 8),
+            sticky="nsew",
+        )
+        self._make_slider_button(slider.content, "Mode", "mode").grid(
+            row=0,
+            column=1,
+            padx=(8, 0),
+            sticky="nsew",
+        )
 
         settings_card = RoundedPanel(
             surface,
@@ -754,29 +777,36 @@ class LanGoPiApp:
             )
             button.grid(row=row, column=column, padx=14, pady=14, sticky="nsew")
             grid.grid_columnconfigure(column, weight=1, uniform="language-column")
+            grid.grid_rowconfigure(row, weight=1)
 
     def _render_mode_buttons(self, parent):
         wrap = tk.Frame(parent, bg=THEME["paper_strong"])
-        wrap.pack(expand=True, fill="x", pady=(18, 0))
+        wrap.pack(expand=True, fill="both", pady=(34, 0))
 
-        for index, (label, key) in enumerate((("Learn", "learn"), ("Game", "game"))):
+        mode_meta = (
+            ("Learn", "learn", "Study words"),
+            ("Game", "game", "Play mode"),
+        )
+        for index, (label, key, subtitle) in enumerate(mode_meta):
             is_selected = self.current_mode == key
-            button = self._make_option_button(
+            button = self._make_mode_tile(
                 wrap,
                 label,
+                subtitle,
                 is_selected,
                 lambda value=key: self._switch_mode(value),
             )
-            button.grid(row=index, column=0, padx=20, pady=20, sticky="ew")
-        wrap.grid_columnconfigure(0, weight=1)
+            button.grid(row=0, column=index, padx=14, pady=14, sticky="nsew")
+            wrap.grid_columnconfigure(index, weight=1, uniform="mode-column")
+        wrap.grid_rowconfigure(0, weight=1)
 
     def _make_option_button(self, parent, text, is_selected, command):
         return RoundedButton(
             parent,
             text=text,
             command=command,
-            width=240,
-            height=88,
+            width=194,
+            height=96,
             radius=34,
             fill=THEME["accent"] if is_selected else THEME["surface_alt"],
             active_fill=THEME["accent_soft"] if is_selected else THEME["surface"],
@@ -786,15 +816,34 @@ class LanGoPiApp:
             border=THEME["line"],
         )
 
+    def _make_mode_tile(self, parent, text, subtitle, is_selected, command):
+        return RoundedButton(
+            parent,
+            text=text,
+            subtitle=subtitle,
+            command=command,
+            width=MODE_TILE_SIZE,
+            height=MODE_TILE_SIZE,
+            radius=44,
+            fill=THEME["accent"] if is_selected else THEME["surface_alt"],
+            active_fill=THEME["accent_soft"] if is_selected else THEME["surface"],
+            pressed_fill=THEME["accent_strong"] if is_selected else THEME["warm"],
+            text_color=THEME["paper_strong"] if is_selected else THEME["ink"],
+            subtitle_color=THEME["paper"] if is_selected else THEME["muted"],
+            font=TOUCH_FONT_SMALL,
+            subtitle_font=("Avenir Next", 14, "bold"),
+            border=THEME["line"],
+        )
+
     def _make_slider_button(self, parent, text, tab_key):
         is_selected = self.settings_tab == tab_key
         return RoundedButton(
             parent,
             text=text,
             command=lambda: self._switch_settings_tab(tab_key),
-            width=226,
-            height=64,
-            radius=24,
+            width=SWITCHER_BUTTON_WIDTH,
+            height=SWITCHER_BUTTON_HEIGHT,
+            radius=28,
             fill=THEME["accent"] if is_selected else THEME["surface_alt"],
             active_fill=THEME["accent_soft"] if is_selected else THEME["surface"],
             pressed_fill=THEME["accent_strong"] if is_selected else THEME["warm"],
@@ -813,10 +862,10 @@ class LanGoPiApp:
         )
         return stage
 
-    def _add_gear_button(self, parent):
+    def _add_nav_button(self, parent, icon_text):
         return RoundedButton(
             parent,
-            text="\u2699",
+            text=icon_text,
             command=self._toggle_settings,
             width=72,
             height=72,
