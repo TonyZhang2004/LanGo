@@ -35,6 +35,7 @@ label_map = {
     "Human face": "Face",
     "Footwear": "Shoe",
     "Desk": "Table",
+    "Tablet computer": "Tablet",
 
 }
 
@@ -46,8 +47,17 @@ cap = cv2.VideoCapture(0)
 # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-frame_timestamp = 0
 vocab_words = [] # words from detected objects
+
+# state machine variable:
+# 0: no pinch
+# 1: pinch activated
+# 2: pinch released
+touched = 0
+touch_start = [0, 0]
+touch_end = [0, 0]
+
+pinch_threshold = 40
 
 while True:
     ret, frame = cap.read()
@@ -75,38 +85,50 @@ while True:
         thumb = hand_landmarks.landmark[4]
         thumb_x = int(thumb.x * w)
         thumb_y = int(thumb.y * h)
+
+        #distance eq for pinch gesture
+        pinch_distance = math.sqrt((thumb_x - tip_x)** 2 + (thumb_y - tip_y) ** 2)
+
+
         # Draw red dot
         #cv2.circle(frame, (tip_x, tip_y), 10, (0, 0, 255), -1)
+        if touched == 0: #no pinch, default to point detection
 
-        detected_objs = []
-        
-        for box in yolo_results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-            cls = int(box.cls[0])
-            label = model.names[cls]
-            if (x1 <= tip_x <= x2 and y1 <= tip_y <= y2) and label not in detected_objs and label not in ignore_classes: #inside bounding box
-                #add to list of detected 
-                detected_objs.append(box)
+            if pinch_distance < pinch_threshold:
+                touched = 1
+                touch_start = [tip_x, tip_y]
+                continue
 
-        sorted_objs = sorted(
-        detected_objs,
-        key=lambda box: (
-            (box.xyxy[0].cpu().numpy()[2] - box.xyxy[0].cpu().numpy()[0]) *
-            (box.xyxy[0].cpu().numpy()[3] - box.xyxy[0].cpu().numpy()[1])
-        )
-        )
 
-        for obj in sorted_objs:
-            x1, y1, x2, y2 = map(int, obj.xyxy[0].cpu().numpy())
-            cls = int(obj.cls[0])
-            label = model.names[cls]
-            clean_label = label_map.get(label, label)
-            if clean_label not in vocab_words: #create image + word if not in vocab list already
-                vocab_words.append(clean_label)
-                filename = f"{clean_label.replace(' ', '_').lower()}.jpg"
-                filepath = os.path.join("images", filename)
-                crop = frame[y1:y2, x1:x2]
-                cv2.imwrite(filepath, crop)
+            detected_objs = []
+            
+            for box in yolo_results.boxes:
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                cls = int(box.cls[0])
+                label = model.names[cls]
+                if (x1 <= tip_x <= x2 and y1 <= tip_y <= y2) and label not in detected_objs and label not in ignore_classes: #inside bounding box
+                    #add to list of detected 
+                    detected_objs.append(box)
+
+            sorted_objs = sorted(
+            detected_objs,
+            key=lambda box: (
+                (box.xyxy[0].cpu().numpy()[2] - box.xyxy[0].cpu().numpy()[0]) *
+                (box.xyxy[0].cpu().numpy()[3] - box.xyxy[0].cpu().numpy()[1])
+            )
+            )
+
+            for obj in sorted_objs:
+                x1, y1, x2, y2 = map(int, obj.xyxy[0].cpu().numpy())
+                cls = int(obj.cls[0])
+                label = model.names[cls]
+                clean_label = label_map.get(label, label)
+                if clean_label not in vocab_words: #create image + word if not in vocab list already
+                    vocab_words.append(clean_label)
+                    filename = f"{clean_label.replace(' ', '_').lower()}.jpg"
+                    filepath = os.path.join("images", filename)
+                    crop = frame[y1:y2, x1:x2]
+                    cv2.imwrite(filepath, crop)
 
             # cv2.rectangle(frame,
             #           (int(x1), int(y1)),
@@ -116,6 +138,30 @@ while True:
             #             (int(x1), int(y1) - 5),
             #             cv2.FONT_HERSHEY_SIMPLEX,
             #             0.5, (0,255,0), 2)
+
+        elif touched == 1: # still pinching
+            touch_end = [tip_x, tip_y]
+            cv2.circle(frame, (tip_x, tip_y), 10, (0, 0, 255), -1)
+            cv2.rectangle(frame,
+                      (int(touch_start[0]), int(touch_start[1])),
+                      (int(touch_end[0]), int(touch_end[1])),
+                      (0, 255, 0), 2)
+
+            if pinch_distance > pinch_threshold:
+                touched = 2
+        
+        elif touched == 2: # pinch let go, store picture
+            if (abs(touch_start[0] - touch_end[0]) < 20) or (abs(touch_start[1] - touch_end[1]) < 20):
+                touched = 0
+                continue 
+
+            crop = frame[touch_start[1]:touch_end[1], touch_start[0]:touch_end[0]]
+            if crop.size > 0:
+                filename = f"screenshot.jpg"
+                filepath = os.path.join("images", filename)
+                cv2.imwrite(filepath, crop)
+
+            touched = 0
 
 
 
