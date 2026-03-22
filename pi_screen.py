@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib import error
 
+from backend.language_state import language_options
 from hardware.detection_client import (
     SERVER_BASE,
     confirm_pending,
@@ -30,15 +31,15 @@ THEME = {
     "paper_strong": "#fffdf9",
     "ink": "#151719",
     "muted": "#5c645f",
-    "line": "#d8d3c7",
-    "accent": "#d7ff5c",
-    "accent_strong": "#9bde37",
-    "accent_soft": "#edf8c8",
-    "warm": "#f2b46b",
-    "surface": "#fffaf1",
-    "surface_alt": "#f4ede0",
+    "line": "#d1c2b4",
+    "accent": "#6a4128",
+    "accent_strong": "#4d2c18",
+    "accent_soft": "#e8d5c2",
+    "warm": "#c9986b",
+    "surface": "#fbf2e6",
+    "surface_alt": "#efe1d1",
     "danger": "#8e3b31",
-    "success": "#4e7d20",
+    "success": "#6a4128",
 }
 
 TITLE_FONT = ("Avenir Next Condensed", 34, "bold")
@@ -47,8 +48,287 @@ BODY_BOLD_FONT = ("Avenir Next", 16, "bold")
 META_FONT = ("Avenir Next", 10, "bold")
 DISPLAY_FONT = ("Avenir Next", 24)
 DISPLAY_BOLD_FONT = ("Avenir Next", 28, "bold")
-TOUCH_FONT = ("Avenir Next", 20, "bold")
-TOUCH_FONT_SMALL = ("Avenir Next", 18, "bold")
+TOUCH_FONT = ("Avenir Next", 24, "bold")
+TOUCH_FONT_SMALL = ("Avenir Next", 22, "bold")
+CHIP_TITLE_FONT = ("Avenir Next", 20, "bold")
+CHIP_SUBTITLE_FONT = ("Avenir Next", 14)
+
+
+if tk is not None:
+    class RoundedPanel(tk.Canvas):
+        def __init__(self, parent, *, fill, border, radius=32, padding=0, **kwargs):
+            super().__init__(
+                parent,
+                bg=parent.cget("bg"),
+                highlightthickness=0,
+                bd=0,
+                relief="flat",
+                **kwargs,
+            )
+            self.fill = fill
+            self.border = border
+            self.radius = radius
+            self.padding = padding
+            self.content = tk.Frame(self, bg=fill)
+            self._content_window = self.create_window((padding, padding), window=self.content, anchor="nw")
+            self.bind("<Configure>", self._redraw)
+
+        def _rounded_points(self, width, height):
+            radius = max(8, min(self.radius, width // 2, height // 2))
+            x1 = y1 = 1
+            x2 = max(x1 + 2, width - 1)
+            y2 = max(y1 + 2, height - 1)
+            return [
+                x1 + radius,
+                y1,
+                x1 + radius,
+                y1,
+                x2 - radius,
+                y1,
+                x2 - radius,
+                y1,
+                x2,
+                y1,
+                x2,
+                y1 + radius,
+                x2,
+                y1 + radius,
+                x2,
+                y2 - radius,
+                x2,
+                y2 - radius,
+                x2,
+                y2,
+                x2 - radius,
+                y2,
+                x2 - radius,
+                y2,
+                x1 + radius,
+                y2,
+                x1 + radius,
+                y2,
+                x1,
+                y2,
+                x1,
+                y2 - radius,
+                x1,
+                y2 - radius,
+                x1,
+                y1 + radius,
+                x1,
+                y1 + radius,
+                x1,
+                y1,
+            ]
+
+        def _redraw(self, _event=None):
+            width = max(2, self.winfo_width())
+            height = max(2, self.winfo_height())
+            self.delete("panel-bg")
+            self.create_polygon(
+                self._rounded_points(width, height),
+                smooth=True,
+                splinesteps=36,
+                fill=self.fill,
+                outline=self.border,
+                width=1,
+                tags="panel-bg",
+            )
+            self.tag_lower("panel-bg")
+            inset = self.padding
+            self.coords(self._content_window, inset, inset)
+            self.itemconfigure(
+                self._content_window,
+                width=max(1, width - (inset * 2)),
+                height=max(1, height - (inset * 2)),
+            )
+
+
+    class RoundedButton(tk.Canvas):
+        def __init__(
+            self,
+            parent,
+            *,
+            text,
+            command,
+            width,
+            height,
+            radius,
+            fill,
+            text_color,
+            font,
+            border,
+            active_fill=None,
+            disabled=False,
+            subtitle=None,
+            subtitle_font=CHIP_SUBTITLE_FONT,
+            subtitle_color=None,
+            pressed_fill=None,
+        ):
+            super().__init__(
+                parent,
+                width=width,
+                height=height,
+                bg=parent.cget("bg"),
+                highlightthickness=0,
+                bd=0,
+                relief="flat",
+                cursor="hand2" if not disabled else "arrow",
+            )
+            self.label = text
+            self.command = command
+            self.radius = radius
+            self.fill = fill
+            self.text_color = text_color
+            self.font = font
+            self.border = border
+            self.active_fill = active_fill or fill
+            self.pressed_fill = pressed_fill or self.active_fill
+            self.disabled = disabled
+            self.subtitle = subtitle
+            self.subtitle_font = subtitle_font
+            self.subtitle_color = subtitle_color or text_color
+            self.is_hovered = False
+            self.is_pressed = False
+            self.bind("<Configure>", self._redraw)
+            self.bind("<Enter>", self._handle_enter)
+            self.bind("<Leave>", self._handle_leave)
+            self.bind("<ButtonPress-1>", self._handle_press)
+            self.bind("<ButtonRelease-1>", self._handle_release)
+            self._redraw()
+
+        def _rounded_points(self, width, height):
+            radius = max(8, min(self.radius, width // 2, height // 2))
+            x1 = y1 = 1
+            x2 = max(x1 + 2, width - 1)
+            y2 = max(y1 + 2, height - 1)
+            return [
+                x1 + radius,
+                y1,
+                x1 + radius,
+                y1,
+                x2 - radius,
+                y1,
+                x2 - radius,
+                y1,
+                x2,
+                y1,
+                x2,
+                y1 + radius,
+                x2,
+                y1 + radius,
+                x2,
+                y2 - radius,
+                x2,
+                y2 - radius,
+                x2,
+                y2,
+                x2 - radius,
+                y2,
+                x2 - radius,
+                y2,
+                x1 + radius,
+                y2,
+                x1 + radius,
+                y2,
+                x1,
+                y2,
+                x1,
+                y2 - radius,
+                x1,
+                y2 - radius,
+                x1,
+                y1 + radius,
+                x1,
+                y1 + radius,
+                x1,
+                y1,
+            ]
+
+        def _current_fill(self):
+            if self.disabled:
+                return THEME["accent_soft"]
+            if self.is_pressed:
+                return self.pressed_fill
+            if self.is_hovered:
+                return self.active_fill
+            return self.fill
+
+        def _redraw(self, _event=None):
+            width = max(2, self.winfo_width())
+            height = max(2, self.winfo_height())
+            fill = self._current_fill()
+            self.delete("button")
+            self.create_polygon(
+                self._rounded_points(width, height),
+                smooth=True,
+                splinesteps=36,
+                fill=fill,
+                outline=self.border,
+                width=1,
+                tags="button",
+            )
+            if self.subtitle:
+                self.create_text(
+                    width / 2,
+                    height * 0.38,
+                    text=self.label,
+                    fill=self.text_color,
+                    font=self.font,
+                    tags="button",
+                )
+                self.create_text(
+                    width / 2,
+                    height * 0.68,
+                    text=self.subtitle,
+                    fill=self.subtitle_color,
+                    font=self.subtitle_font,
+                    tags="button",
+                )
+            else:
+                self.create_text(
+                    width / 2,
+                    height / 2,
+                    text=self.label,
+                    fill=self.text_color,
+                    font=self.font,
+                    tags="button",
+                )
+
+        def _handle_enter(self, _event):
+            if self.disabled:
+                return
+            self.is_hovered = True
+            self._redraw()
+
+        def _handle_leave(self, _event):
+            self.is_hovered = False
+            self.is_pressed = False
+            self._redraw()
+
+        def _handle_press(self, _event):
+            if self.disabled:
+                return
+            self.is_pressed = True
+            self._redraw()
+
+        def _handle_release(self, event):
+            if self.disabled:
+                return
+            was_pressed = self.is_pressed
+            self.is_pressed = False
+            self._redraw()
+            if was_pressed and 0 <= event.x <= self.winfo_width() and 0 <= event.y <= self.winfo_height():
+                self.command()
+else:
+    class RoundedPanel:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("Tkinter is not available in this Python environment.")
+
+
+    class RoundedButton:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("Tkinter is not available in this Python environment.")
 
 
 def format_display_time(timestamp, fallback_time=""):
@@ -102,7 +382,7 @@ class LanGoPiApp:
         self.root = root or tk.Tk()
         self.server_base = server_base
         self.poll_ms = poll_ms
-        self.languages = []
+        self.languages = language_options()
         self.selected_language = {"key": "spanish", "label": "Spanish", "locale": "es-ES"}
         self.pending_items = []
         self.history_entries = []
@@ -123,6 +403,39 @@ class LanGoPiApp:
         self._configure_style()
         self._build_shell()
         self._refresh_data()
+
+    def _data_signature(self):
+        pending_signature = tuple(
+            (
+                item.get("pendingId"),
+                item.get("english"),
+                item.get("translated"),
+                item.get("image"),
+                item.get("createdAt"),
+            )
+            for item in self.pending_items
+        )
+        history_signature = tuple(
+            (
+                item.get("id"),
+                item.get("english"),
+                item.get("translated"),
+                item.get("image"),
+                item.get("createdAt"),
+            )
+            for item in self.history_entries[:1]
+        )
+        language_signature = tuple(
+            (item.get("key"), item.get("label"), item.get("locale"))
+            for item in self.languages
+        )
+        return (
+            self.selected_language.get("key"),
+            self.selected_pending_id,
+            language_signature,
+            pending_signature,
+            history_signature,
+        )
 
     def _configure_root(self):
         self.root.title("LanGo Pi")
@@ -194,8 +507,9 @@ class LanGoPiApp:
     def _render_main_screen(self):
         stage = self._make_stage(self.content_frame)
         stage.pack(fill="both", expand=True)
+        surface = stage.content
 
-        self._add_gear_button(stage).place(relx=0.97, rely=0.06, anchor="ne")
+        self._add_gear_button(surface).place(relx=0.97, rely=0.06, anchor="ne")
 
         main_message = format_main_message(
             self.current_mode,
@@ -203,7 +517,7 @@ class LanGoPiApp:
             self.history_entries[0] if self.history_entries else None,
         )
 
-        center = tk.Frame(stage, bg=THEME["paper_strong"])
+        center = tk.Frame(surface, bg=THEME["paper_strong"])
         center.place(relx=0.5, rely=0.38, anchor="center")
 
         tk.Label(
@@ -214,14 +528,20 @@ class LanGoPiApp:
             font=DISPLAY_FONT if "\u2192" in main_message else DISPLAY_BOLD_FONT,
         ).pack()
 
-        footer = tk.Frame(stage, bg=THEME["paper_strong"])
+        footer = RoundedPanel(
+            surface,
+            fill=THEME["surface"],
+            border=THEME["line"],
+            radius=32,
+            padding=18,
+        )
         footer.place(relx=0.5, rely=0.84, anchor="s", relwidth=0.86, relheight=0.34)
 
         if self.current_mode == "game":
-            self._render_game_placeholder(footer)
+            self._render_game_placeholder(footer.content)
             return
 
-        self._render_pending_footer(footer)
+        self._render_pending_footer(footer.content)
 
     def _render_game_placeholder(self, parent):
         tk.Label(
@@ -244,19 +564,19 @@ class LanGoPiApp:
     def _render_pending_footer(self, parent):
         selected = self._selected_pending_item()
 
-        header = tk.Frame(parent, bg=THEME["paper_strong"])
+        header = tk.Frame(parent, bg=THEME["surface"])
         header.pack(fill="x")
         tk.Label(
             header,
             text="Learn Queue",
-            bg=THEME["paper_strong"],
+            bg=THEME["surface"],
             fg=THEME["muted"],
             font=META_FONT,
         ).pack(side="left")
         tk.Label(
             header,
             text=f"{len(self.pending_items)} pending",
-            bg=THEME["paper_strong"],
+            bg=THEME["surface"],
             fg=THEME["muted"],
             font=("Avenir Next", 11),
         ).pack(side="right")
@@ -265,23 +585,23 @@ class LanGoPiApp:
             tk.Label(
                 parent,
                 text=f"No pending detections for {self.selected_language['label']}.",
-                bg=THEME["paper_strong"],
+                bg=THEME["surface"],
                 fg=THEME["muted"],
                 font=BODY_FONT,
             ).pack(anchor="center", pady=(28, 0))
             return
 
-        list_host = tk.Frame(parent, bg=THEME["paper_strong"])
+        list_host = tk.Frame(parent, bg=THEME["surface"])
         list_host.pack(fill="both", expand=True, pady=(14, 12))
 
-        canvas = tk.Canvas(list_host, bg=THEME["paper_strong"], bd=0, highlightthickness=0, height=110)
+        canvas = tk.Canvas(list_host, bg=THEME["surface"], bd=0, highlightthickness=0, height=112)
         scrollbar = ttk.Scrollbar(
             list_host,
             orient="horizontal",
             style="LanGo.Horizontal.TScrollbar",
             command=canvas.xview,
         )
-        rows = tk.Frame(canvas, bg=THEME["paper_strong"])
+        rows = tk.Frame(canvas, bg=THEME["surface"])
         rows.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.create_window((0, 0), window=rows, anchor="nw")
         canvas.configure(xscrollcommand=scrollbar.set)
@@ -291,7 +611,7 @@ class LanGoPiApp:
         for pending in self.pending_items:
             self._render_pending_chip(rows, pending)
 
-        action_bar = tk.Frame(parent, bg=THEME["paper_strong"])
+        action_bar = tk.Frame(parent, bg=THEME["surface"])
         action_bar.pack(fill="x")
 
         if selected:
@@ -302,107 +622,105 @@ class LanGoPiApp:
         tk.Label(
             action_bar,
             text=meta_text,
-            bg=THEME["paper_strong"],
+            bg=THEME["surface"],
             fg=THEME["muted"],
             font=("Avenir Next", 12),
         ).pack(side="left")
 
-        controls = tk.Frame(action_bar, bg=THEME["paper_strong"])
+        controls = tk.Frame(action_bar, bg=THEME["surface"])
         controls.pack(side="right")
-        tk.Button(
+        RoundedButton(
             controls,
             text="Add to History",
             command=self._confirm_selected_pending,
-            bg=THEME["accent"] if selected else THEME["accent_soft"],
-            fg=THEME["ink"],
-            activebackground=THEME["accent_strong"],
-            activeforeground=THEME["ink"],
-            relief="flat",
-            state="normal" if selected else "disabled",
-            padx=16,
-            pady=10,
-            font=BODY_BOLD_FONT,
-            cursor="hand2" if selected else "arrow",
+            width=236,
+            height=68,
+            radius=30,
+            fill=THEME["accent"] if selected else THEME["accent_soft"],
+            active_fill=THEME["accent_strong"],
+            pressed_fill=THEME["accent_strong"],
+            text_color=THEME["paper_strong"] if selected else THEME["muted"],
+            font=TOUCH_FONT_SMALL,
+            border=THEME["line"],
+            disabled=not selected,
         ).pack(side="left", padx=(0, 10))
-        tk.Button(
+        RoundedButton(
             controls,
             text="Reject",
             command=self._reject_selected_pending,
-            bg=THEME["surface_alt"],
-            fg=THEME["ink"],
-            activebackground=THEME["warm"],
-            activeforeground=THEME["ink"],
-            relief="flat",
-            state="normal" if selected else "disabled",
-            padx=16,
-            pady=10,
-            font=BODY_BOLD_FONT,
-            cursor="hand2" if selected else "arrow",
+            width=156,
+            height=68,
+            radius=30,
+            fill=THEME["surface_alt"],
+            active_fill=THEME["warm"],
+            pressed_fill=THEME["warm"],
+            text_color=THEME["ink"],
+            font=TOUCH_FONT_SMALL,
+            border=THEME["line"],
+            disabled=not selected,
         ).pack(side="left")
 
     def _render_pending_chip(self, parent, pending):
         is_selected = pending.get("pendingId") == self.selected_pending_id
-        bg = THEME["accent"] if is_selected else THEME["surface_alt"]
-
-        chip = tk.Frame(
+        chip = RoundedButton(
             parent,
-            bg=bg,
-            padx=14,
-            pady=12,
-            cursor="hand2",
-            highlightbackground=THEME["line"],
-            highlightthickness=0 if is_selected else 1,
+            text=pending.get("english", ""),
+            subtitle=pending.get("translated", ""),
+            command=lambda pending_id=pending["pendingId"]: self._select_pending(pending_id),
+            width=220,
+            height=92,
+            radius=30,
+            fill=THEME["accent"] if is_selected else THEME["surface_alt"],
+            active_fill=THEME["accent_soft"] if is_selected else THEME["paper_strong"],
+            pressed_fill=THEME["accent_strong"] if is_selected else THEME["surface"],
+            text_color=THEME["paper_strong"] if is_selected else THEME["ink"],
+            subtitle_color=THEME["paper"] if is_selected else THEME["muted"],
+            font=CHIP_TITLE_FONT,
+            border=THEME["line"],
         )
         chip.pack(side="left", padx=(0, 12))
-        chip.bind("<Button-1>", lambda _event, pending_id=pending["pendingId"]: self._select_pending(pending_id))
-
-        tk.Label(
-            chip,
-            text=pending.get("english", ""),
-            bg=bg,
-            fg=THEME["ink"],
-            font=BODY_BOLD_FONT,
-        ).pack(anchor="w")
-        tk.Label(
-            chip,
-            text=pending.get("translated", ""),
-            bg=bg,
-            fg=THEME["ink"],
-            font=("Avenir Next", 13),
-        ).pack(anchor="w")
 
     def _render_settings_screen(self):
         stage = self._make_stage(self.content_frame)
         stage.pack(fill="both", expand=True)
+        surface = stage.content
 
-        self._add_gear_button(stage).place(relx=0.97, rely=0.06, anchor="ne")
+        self._add_gear_button(surface).place(relx=0.97, rely=0.06, anchor="ne")
 
-        slider = tk.Frame(stage, bg=THEME["surface_alt"], padx=8, pady=8)
-        slider.place(relx=0.5, rely=0.10, anchor="n")
-
-        self._make_slider_button(slider, "Language", "language").pack(side="left", padx=(0, 8))
-        self._make_slider_button(slider, "Mode", "mode").pack(side="left")
-
-        settings_card = tk.Frame(
-            stage,
-            bg=THEME["paper_strong"],
-            highlightbackground=THEME["line"],
-            highlightthickness=1,
-            padx=18,
-            pady=18,
+        slider = RoundedPanel(
+            surface,
+            fill=THEME["surface_alt"],
+            border=THEME["line"],
+            radius=32,
+            padding=8,
+            width=490,
+            height=92,
         )
-        settings_card.place(relx=0.5, rely=0.24, anchor="n", relwidth=0.86, relheight=0.68)
+        slider.place(relx=0.5, rely=0.08, anchor="n")
+
+        slider.content.configure(bg=THEME["surface_alt"])
+        self._make_slider_button(slider.content, "Language", "language").pack(side="left", padx=(0, 10))
+        self._make_slider_button(slider.content, "Mode", "mode").pack(side="left")
+
+        settings_card = RoundedPanel(
+            surface,
+            fill=THEME["paper_strong"],
+            border=THEME["line"],
+            radius=42,
+            padding=26,
+        )
+        settings_card.place(relx=0.5, rely=0.22, anchor="n", relwidth=0.88, relheight=0.72)
 
         title_text = "Select language" if self.settings_tab == "language" else "Select mode"
         tk.Label(
-            settings_card,
+            settings_card.content,
             text=title_text,
             bg=THEME["paper_strong"],
             fg=THEME["muted"],
             font=META_FONT,
         ).pack(anchor="w", pady=(0, 10))
 
-        body_host = tk.Frame(settings_card, bg=THEME["paper_strong"])
+        body_host = tk.Frame(settings_card.content, bg=THEME["paper_strong"])
         body_host.pack(fill="both", expand=True)
 
         if self.settings_tab == "language":
@@ -421,20 +739,8 @@ class LanGoPiApp:
             ).pack(anchor="center", expand=True)
             return
 
-        canvas = tk.Canvas(parent, bg=THEME["paper_strong"], bd=0, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(
-            parent,
-            orient="vertical",
-            style="LanGo.Vertical.TScrollbar",
-            command=canvas.yview,
-        )
-        grid = tk.Frame(canvas, bg=THEME["paper_strong"])
-        grid.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=grid, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
+        grid = tk.Frame(parent, bg=THEME["paper_strong"])
+        grid.pack(expand=True, fill="both", pady=(8, 0))
         columns = 2
         for index, language in enumerate(self.languages):
             row = index // columns
@@ -446,12 +752,12 @@ class LanGoPiApp:
                 is_selected,
                 lambda key=language["key"]: self._handle_language_change(key),
             )
-            button.grid(row=row, column=column, padx=12, pady=12, sticky="nsew")
+            button.grid(row=row, column=column, padx=14, pady=14, sticky="nsew")
             grid.grid_columnconfigure(column, weight=1, uniform="language-column")
 
     def _render_mode_buttons(self, parent):
         wrap = tk.Frame(parent, bg=THEME["paper_strong"])
-        wrap.pack(expand=True)
+        wrap.pack(expand=True, fill="x", pady=(18, 0))
 
         for index, (label, key) in enumerate((("Learn", "learn"), ("Game", "game"))):
             is_selected = self.current_mode == key
@@ -461,68 +767,66 @@ class LanGoPiApp:
                 is_selected,
                 lambda value=key: self._switch_mode(value),
             )
-            button.grid(row=index, column=0, padx=18, pady=18, sticky="ew")
+            button.grid(row=index, column=0, padx=20, pady=20, sticky="ew")
         wrap.grid_columnconfigure(0, weight=1)
 
     def _make_option_button(self, parent, text, is_selected, command):
-        return tk.Button(
+        return RoundedButton(
             parent,
             text=text,
             command=command,
-            bg=THEME["accent"] if is_selected else THEME["surface_alt"],
-            fg=THEME["ink"],
-            activebackground=THEME["accent_strong"],
-            activeforeground=THEME["ink"],
-            relief="flat",
-            padx=36,
-            pady=20,
+            width=240,
+            height=88,
+            radius=34,
+            fill=THEME["accent"] if is_selected else THEME["surface_alt"],
+            active_fill=THEME["accent_soft"] if is_selected else THEME["surface"],
+            pressed_fill=THEME["accent_strong"] if is_selected else THEME["warm"],
+            text_color=THEME["paper_strong"] if is_selected else THEME["ink"],
             font=TOUCH_FONT,
-            cursor="hand2",
-            width=12,
+            border=THEME["line"],
         )
 
     def _make_slider_button(self, parent, text, tab_key):
         is_selected = self.settings_tab == tab_key
-        return tk.Button(
+        return RoundedButton(
             parent,
             text=text,
             command=lambda: self._switch_settings_tab(tab_key),
-            bg=THEME["accent"] if is_selected else THEME["surface_alt"],
-            fg=THEME["ink"],
-            activebackground=THEME["accent_strong"],
-            activeforeground=THEME["ink"],
-            relief="flat",
-            padx=34,
-            pady=14,
+            width=226,
+            height=64,
+            radius=24,
+            fill=THEME["accent"] if is_selected else THEME["surface_alt"],
+            active_fill=THEME["accent_soft"] if is_selected else THEME["surface"],
+            pressed_fill=THEME["accent_strong"] if is_selected else THEME["warm"],
+            text_color=THEME["paper_strong"] if is_selected else THEME["ink"],
             font=TOUCH_FONT_SMALL,
-            cursor="hand2",
-            width=9,
+            border=THEME["line"],
         )
 
     def _make_stage(self, parent):
-        stage = tk.Frame(
+        stage = RoundedPanel(
             parent,
-            bg=THEME["paper_strong"],
-            highlightbackground="#ff3b30",
-            highlightthickness=1,
+            fill=THEME["paper_strong"],
+            border=THEME["line"],
+            radius=48,
+            padding=18,
         )
         return stage
 
     def _add_gear_button(self, parent):
-        return tk.Button(
+        return RoundedButton(
             parent,
             text="\u2699",
             command=self._toggle_settings,
-            bg=THEME["paper_strong"],
-            fg=THEME["ink"],
-            activebackground=THEME["paper_strong"],
-            activeforeground=THEME["ink"],
-            relief="flat",
-            bd=0,
-            padx=6,
-            pady=4,
-            font=("Avenir Next", 28),
-            cursor="hand2",
+            width=72,
+            height=72,
+            radius=28,
+            fill=THEME["surface"],
+            active_fill=THEME["paper_strong"],
+            pressed_fill=THEME["accent_soft"],
+            text_color=THEME["ink"],
+            font=("Avenir Next", 38),
+            border=THEME["line"],
         )
 
     def _toggle_settings(self):
@@ -551,13 +855,14 @@ class LanGoPiApp:
             return THEME["success"]
         return THEME["muted"]
 
-    def _refresh_data(self):
+    def _refresh_data(self, force_render=False):
+        previous_signature = self._data_signature()
         try:
             status_code, language_payload = get_selected_language(server_base=self.server_base)
             if status_code >= 400:
                 raise error.HTTPError("", status_code, "language request failed", None, None)
 
-            self.languages = language_payload.get("languages", [])
+            self.languages = language_payload.get("languages") or self.languages
             self.selected_language = language_payload.get("selectedLanguage", self.selected_language)
             language_key = self.selected_language["key"]
 
@@ -574,7 +879,8 @@ class LanGoPiApp:
         except Exception as exc:
             self._set_status(f"Could not reach LanGo backend: {exc}", "error")
         finally:
-            self._render_screen()
+            if force_render or self._data_signature() != previous_signature or not self.content_frame.winfo_children():
+                self._render_screen()
             self._schedule_refresh()
 
     def _selected_pending_item(self):
@@ -593,7 +899,7 @@ class LanGoPiApp:
             self.selected_language = payload.get("selectedLanguage", self.selected_language)
             self.languages = payload.get("languages", self.languages)
             self._set_status(f"{self.selected_language['label']} is now active for new detections.", "success")
-            self._refresh_data()
+            self._refresh_data(force_render=True)
         except Exception as exc:
             self._set_status(f"Could not switch language: {exc}", "error")
 

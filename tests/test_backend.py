@@ -57,9 +57,13 @@ class DeviceLanguageStateTests(unittest.TestCase):
             state = DeviceLanguageState(Path(temp_dir) / "device_language.json")
 
             payload = state.get_selected_language()
+            language_keys = {language["key"] for language in payload["languages"]}
 
             self.assertEqual(payload["selectedLanguage"]["key"], "spanish")
-            self.assertGreaterEqual(len(payload["languages"]), 7)
+            self.assertEqual(
+                language_keys,
+                {"arabic", "chinese", "french", "japanese", "russian", "spanish"},
+            )
 
     def test_state_persists_selected_language(self):
         with tempfile.TemporaryDirectory() as temp_dir:

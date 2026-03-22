@@ -84,7 +84,7 @@ Use this when YOLO has identified an object and you want LanGo to create a pendi
 
 Arguments:
 
-- `language_key`: one of `arabic`, `chinese`, `french`, `japanese`, `portuguese`, `russian`, `spanish`
+- `language_key`: one of `arabic`, `chinese`, `french`, `japanese`, `russian`, `spanish`
 - `english`: detected English label, for example `apple`, `shoe`, `bottle`
 - `image`: optional frontend-served image path such as `./assets/captures/apple-123.jpg`
 - `server_base`: base URL like `http://127.0.0.1:8001`

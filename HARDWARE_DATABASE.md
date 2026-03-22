@@ -85,7 +85,6 @@ Use one of these values for `languageKey`:
 - `chinese`
 - `french`
 - `japanese`
-- `portuguese`
 - `russian`
 - `spanish`
 

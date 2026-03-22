@@ -7,7 +7,6 @@ TARGET_LANGUAGE_NAMES = {
     "chinese": "Mandarin Chinese",
     "french": "French",
     "japanese": "Japanese",
-    "portuguese": "Portuguese",
     "russian": "Russian",
     "spanish": "Spanish",
 }
