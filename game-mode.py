@@ -45,7 +45,7 @@ def game():
     # -----------------------
     # YOLO Model
     # -----------------------
-    model = YOLO("yolov8s-oiv7.pt")
+    model = YOLO("yolov8n.pt")
 
     ignore_classes = ["Building", "Office building", "Clothing"]
 
@@ -71,7 +71,7 @@ def game():
     random_obj = ""
     timeout = 10
     timeout_start = 0.0
-
+    recent_objs = []
     while True:
         start_time = time.perf_counter()
 
@@ -102,10 +102,17 @@ def game():
             # CHANGE THIS CODE TO GET TRANSLATED WORD FROM LABEL!
             if len(detected_objs) > 0:
                 random_obj = random.choice(detected_objs)
-                word_to_trans = label_map.get(random_obj, random_obj)
-                speak(word_to_trans, lang)
-                timeout_start = time.perf_counter()
-                state = 1
+                if random_obj in recent_objs:
+                    continue
+                else:
+                    recent_objs.append(random_obj)
+                    if len(recent_objs) > 5:
+                        recent_objs.pop(0)
+
+                    word_to_trans = label_map.get(random_obj, random_obj)
+                    speak(word_to_trans, lang)
+                    timeout_start = time.perf_counter()
+                    state = 1
 
         elif state == 1:
             if hand_results.multi_hand_landmarks:
@@ -125,12 +132,13 @@ def game():
                         speak("Correct!", 'en')
                         state = 2
                         break
-                    # elif (x1 <= tip_x <= x2 and y1 <= tip_y <= y2) and label != random_obj:
-                    #     speak("Try Again!", 'en')
+
             if state != 2:
                 current_time = time.perf_counter()
                 if (current_time - timeout_start) > timeout:
                     speak("Next item", 'en')
+                    if random_obj in recent_objs:
+                        recent_objs.remove(random_obj)
                     state = 2
 
         elif state == 2:
