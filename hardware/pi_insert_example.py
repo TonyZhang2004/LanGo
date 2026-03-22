@@ -6,24 +6,11 @@ from pathlib import Path
 from urllib import error, parse, request
 
 # Default is same-machine localhost. For another device on the same network,
-# pass something like http://192.168.1.25:8000/api/history as argv[1].
-SERVER_URL = "http://35.2.56.252:8001/api/history"
-SERVER_BASE = "http://35.2.56.252:8001"
+SERVER_BASE = "http://35.3.62.156:8001"
+SERVER_URL = SERVER_BASE + "/api/history"
 
 def current_time_label():
     return datetime.now().strftime("%I:%M %p").lstrip("0")
-
-
-def build_entry():
-    return {
-        "languageKey": "japanese",
-        "english": "ball",
-        "translated": "ボール",
-        "speech": "ボール",
-        "image": None,
-        "time": current_time_label(),
-    }
-
 
 def insert_entry(entry, server_url=SERVER_URL):
     req = request.Request(
@@ -37,11 +24,10 @@ def insert_entry(entry, server_url=SERVER_URL):
         body = response.read().decode("utf-8")
         return response.status, body
 
-def upload_image(entry_id, image_path, server_base=SERVER_BASE):
-    # file_path = "./hardware/" + image_path
+def upload_image(entry_id, image_path):
     file_path = Path(image_path)
     endpoint = (
-        f"{server_base}/api/upload-image?"
+        f"{SERVER_BASE}/api/upload-image?"
         f"entryId={parse.quote(str(entry_id))}&filename={parse.quote(file_path.name)}"
     )
     req = request.Request(
@@ -62,17 +48,17 @@ def main():
         "image": None,
         "time": current_time_label(),
     }
+    image_path = "./images/hand.jpg"
 
-    server_url = SERVER_URL
     try:
-        status, body = insert_entry(entry, server_url)
+        status, body = insert_entry(entry)
     except error.HTTPError as exc:
         print(f"Insert failed with HTTP {exc.code}")
         print(exc.read().decode("utf-8"))
         raise SystemExit(1) from exc
     except error.URLError as exc:
         print("Could not reach the LanGo server.")
-        print(f"Checked URL: {server_url}")
+        print(f"Checked URL: {SERVER_URL}")
         print("If this script is running on another computer, do not use 127.0.0.1 unless the server is running on that same computer.")
         print(str(exc.reason))
         raise SystemExit(1) from exc
@@ -82,8 +68,6 @@ def main():
 
     data = json.loads(body)
     print(data["entry"]["id"])
-
-    image_path = "./images/hand.jpg"
     entry_id = data["entry"]["id"]
 
     try:

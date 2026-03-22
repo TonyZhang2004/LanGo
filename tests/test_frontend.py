@@ -16,12 +16,27 @@ class FrontendSmokeTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
 
+    def test_pi_panel_script_has_valid_javascript_syntax(self):
+        result = subprocess.run(
+            ["node", "--check", "frontend/pi-panel.js"],
+            cwd=ROOT_DIR,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
     def test_index_html_uses_local_frontend_script_without_babel(self):
         html = (ROOT_DIR / "frontend" / "index.html").read_text(encoding="utf-8")
         self.assertIn('<div id="root"></div>', html)
         self.assertIn('<script src="./script.js"></script>', html)
         self.assertNotIn("text/babel", html)
         self.assertNotIn("@babel/standalone", html)
+
+    def test_pi_html_uses_local_panel_assets(self):
+        html = (ROOT_DIR / "frontend" / "pi.html").read_text(encoding="utf-8")
+        self.assertIn("Language Selection", html)
+        self.assertIn('<script src="./pi-panel.js"></script>', html)
+        self.assertIn('<link rel="stylesheet" href="./pi.css" />', html)
 
     def test_frontend_uses_browser_speech_instead_of_backend_tts_fetch(self):
         script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
@@ -62,8 +77,29 @@ class FrontendSmokeTests(unittest.TestCase):
         script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
         styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")
         self.assertIn('method: "DELETE"', script)
+        self.assertIn("window.confirm(", script)
         self.assertIn("Delete", script)
         self.assertIn(".delete-button", styles)
+
+    def test_frontend_supports_pending_detection_confirmation_panel(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("/api/detections/pending", script)
+        self.assertIn("/api/detections/confirm", script)
+        self.assertIn("/api/detections/reject", script)
+        self.assertIn("Pending Detection", script)
+        self.assertIn(".pending-card", styles)
+
+    def test_frontend_dedups_existing_history_entry_when_confirming_pending(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        self.assertIn("function sameHistoryEntry", script)
+        self.assertIn("currentEntries.filter((item) => !sameHistoryEntry(item, payload.entry))", script)
+
+    def test_pi_panel_supports_device_language_selection(self):
+        script = (ROOT_DIR / "frontend" / "pi-panel.js").read_text(encoding="utf-8")
+        self.assertIn("/api/device/language", script)
+        self.assertIn("Saving", script)
+        self.assertIn("selectedLanguage", script)
 
     def test_frontend_no_longer_contains_ball_and_shoe_demo_seed_rows(self):
         script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")

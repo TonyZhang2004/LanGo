@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 
 from backend.groq_audio_translation import GroqAudioTranslator
-from backend.server import build_uploaded_image_path, resolve_tts_provider, resolve_uploaded_image_file, save_uploaded_image
+from backend.language_state import DeviceLanguageState
+from backend.server import build_uploaded_image_path, resolve_managed_image_file, resolve_tts_provider, save_uploaded_image
 
 
 class TranslatorSupportTests(unittest.TestCase):
@@ -44,10 +45,40 @@ class ServerLogicTests(unittest.TestCase):
                 self.assertEqual(file_path.read_bytes(), b"jpg-bytes")
 
     def test_resolve_uploaded_image_file_returns_frontend_upload_path(self):
-        image_file = resolve_uploaded_image_file("./assets/uploads/pumpkin.jpg")
+        image_file = resolve_managed_image_file("./assets/uploads/pumpkin.jpg")
 
         self.assertEqual(image_file, Path(__file__).resolve().parent.parent / "frontend" / "assets" / "uploads" / "pumpkin.jpg")
-        self.assertIsNone(resolve_uploaded_image_file("./assets/ball.svg"))
+        self.assertIsNone(resolve_managed_image_file("./assets/ball.svg"))
+
+
+class DeviceLanguageStateTests(unittest.TestCase):
+    def test_state_defaults_to_spanish(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = DeviceLanguageState(Path(temp_dir) / "device_language.json")
+
+            payload = state.get_selected_language()
+
+            self.assertEqual(payload["selectedLanguage"]["key"], "spanish")
+            self.assertGreaterEqual(len(payload["languages"]), 7)
+
+    def test_state_persists_selected_language(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "device_language.json"
+            state = DeviceLanguageState(state_path)
+            state.set_selected_language("japanese")
+
+            restored = DeviceLanguageState(state_path)
+            payload = restored.get_selected_language()
+
+            self.assertEqual(payload["selectedLanguage"]["key"], "japanese")
+            self.assertEqual(payload["selectedLanguage"]["label"], "Japanese")
+
+    def test_state_rejects_unsupported_language(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = DeviceLanguageState(Path(temp_dir) / "device_language.json")
+
+            with self.assertRaises(ValueError):
+                state.set_selected_language("klingon")
 
 
 if __name__ == "__main__":

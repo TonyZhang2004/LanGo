@@ -37,6 +37,7 @@ class TranslationStoreDatabaseTests(unittest.TestCase):
         self.assertEqual(entries[0]["image"], "./assets/book.jpg")
         self.assertIsNotNone(created["createdAt"])
         self.assertEqual(created["languageKey"], "spanish")
+        self.assertRegex(created["createdAt"], r"(Z|[+-]\d{2}:\d{2})$")
 
     def test_create_entry_dedups_existing_english_within_same_language(self):
         original = self.store.create_entry(
@@ -151,6 +152,7 @@ class TranslationStoreDatabaseTests(unittest.TestCase):
         )
 
         self.assertIsNone(created["image"])
+        self.assertRegex(created["createdAt"], r"(Z|[+-]\d{2}:\d{2})$")
 
     def test_existing_demo_entries_are_removed_on_store_init(self):
         db_path = Path(self.temp_dir.name) / "demo.db"
@@ -172,18 +174,18 @@ class TranslationStoreDatabaseTests(unittest.TestCase):
         connection.execute(
             """
             INSERT INTO translation_entries (
-                language_key, english, translated, speech, image, time_label
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                language_key, english, translated, speech, image, time_label, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            ("japanese", "ball", "ボール", "ボール", "./assets/ball.svg", "2:42 PM"),
+            ("japanese", "ball", "ボール", "ボール", "./assets/ball.svg", "2:42 PM", "2025-03-21 03:42:00"),
         )
         connection.execute(
             """
             INSERT INTO translation_entries (
-                language_key, english, translated, speech, image, time_label
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                language_key, english, translated, speech, image, time_label, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            ("japanese", "custom", "カスタム", "カスタム", None, "4:00 PM"),
+            ("japanese", "custom", "カスタム", "カスタム", None, "4:00 PM", "2025-03-21 04:00:00"),
         )
         connection.commit()
         connection.close()
@@ -193,6 +195,7 @@ class TranslationStoreDatabaseTests(unittest.TestCase):
 
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["english"], "custom")
+        self.assertEqual(entries[0]["createdAt"], "2025-03-21T04:00:00Z")
 
     def test_delete_entry_removes_inserted_translation_entry(self):
         created = self.store.create_entry(
