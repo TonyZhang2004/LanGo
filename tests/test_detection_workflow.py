@@ -21,26 +21,45 @@ class DetectionWorkflowTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_submit_detection_creates_pending_translation(self):
-        pending, created = self.workflow.submit_detection(
+        pending, created, discarded = self.workflow.submit_detection(
             language_key="spanish",
             english="apple",
             image="./assets/captures/apple.jpg",
         )
 
         self.assertTrue(created)
+        self.assertEqual(discarded, [])
         self.assertEqual(pending["languageKey"], "spanish")
         self.assertEqual(pending["english"], "apple")
         self.assertEqual(pending["translated"], "Spanish:apple")
 
     def test_submit_detection_dedups_pending_english_per_language(self):
-        original, _ = self.workflow.submit_detection("spanish", "apple", "./assets/captures/apple-1.jpg")
-        duplicate, created = self.workflow.submit_detection("spanish", "apple", "./assets/captures/apple-2.jpg")
+        original, _, _ = self.workflow.submit_detection("spanish", "apple", "./assets/captures/apple-1.jpg")
+        duplicate, created, discarded = self.workflow.submit_detection("spanish", "apple", "./assets/captures/apple-2.jpg")
 
         self.assertFalse(created)
+        self.assertEqual(discarded, [])
         self.assertEqual(duplicate["pendingId"], original["pendingId"])
 
+    def test_submit_detection_discards_oldest_when_queue_exceeds_five(self):
+        workflow = DetectionWorkflow(translator=FakeTranslator(), max_pending_per_language=5)
+
+        for index in range(6):
+            pending, created, discarded = workflow.submit_detection(
+                "spanish",
+                f"item-{index}",
+                f"./assets/captures/item-{index}.jpg",
+            )
+
+        queue = workflow.list_pending("spanish")
+
+        self.assertTrue(created)
+        self.assertEqual(pending["english"], "item-5")
+        self.assertEqual([entry["english"] for entry in discarded], ["item-0"])
+        self.assertEqual([entry["english"] for entry in queue], ["item-5", "item-4", "item-3", "item-2", "item-1"])
+
     def test_confirm_pending_moves_entry_into_history(self):
-        pending, _ = self.workflow.submit_detection("japanese", "bottle", "./assets/captures/bottle.jpg")
+        pending, _, _ = self.workflow.submit_detection("japanese", "bottle", "./assets/captures/bottle.jpg")
 
         entry = self.workflow.confirm_pending(pending["pendingId"], self.store)
 
@@ -49,7 +68,7 @@ class DetectionWorkflowTests(unittest.TestCase):
         self.assertEqual(self.workflow.list_pending("japanese"), [])
 
     def test_reject_pending_removes_pending_entry(self):
-        pending, _ = self.workflow.submit_detection("french", "book", None)
+        pending, _, _ = self.workflow.submit_detection("french", "book", None)
 
         rejected = self.workflow.reject_pending(pending["pendingId"])
 

@@ -59,6 +59,8 @@ SWITCHER_BAR_HEIGHT = 104
 SWITCHER_BUTTON_WIDTH = 170
 SWITCHER_BUTTON_HEIGHT = 80
 MODE_TILE_SIZE = 180
+MAX_HOME_PENDING = 5
+QUEUE_ROW_HEIGHT = 108
 
 
 if tk is not None:
@@ -386,6 +388,10 @@ def navigation_icon(show_settings):
     return HOME_ICON if show_settings else GEAR_ICON
 
 
+def visible_pending_items(pending_items, max_items=MAX_HOME_PENDING):
+    return list(pending_items[:max_items])
+
+
 class LanGoPiApp:
     def __init__(self, root=None, server_base=SERVER_BASE, poll_ms=DEFAULT_POLL_MS):
         if tk is None or ttk is None:
@@ -521,38 +527,27 @@ class LanGoPiApp:
         surface = stage.content
 
         self._add_nav_button(surface, navigation_icon(False)).place(relx=0.97, rely=0.06, anchor="ne")
+        if self.current_mode == "game":
+            game_panel = RoundedPanel(
+                surface,
+                fill=THEME["surface"],
+                border=THEME["line"],
+                radius=38,
+                padding=22,
+            )
+            game_panel.place(relx=0.5, rely=0.16, anchor="n", relwidth=0.9, relheight=0.72)
+            self._render_game_placeholder(game_panel.content)
+            return
 
-        main_message = format_main_message(
-            self.current_mode,
-            self._selected_pending_item(),
-            self.history_entries[0] if self.history_entries else None,
-        )
-
-        center = tk.Frame(surface, bg=THEME["paper_strong"])
-        center.place(relx=0.5, rely=0.38, anchor="center")
-
-        tk.Label(
-            center,
-            text=main_message,
-            bg=THEME["paper_strong"],
-            fg=THEME["ink"],
-            font=DISPLAY_FONT if "\u2192" in main_message else DISPLAY_BOLD_FONT,
-        ).pack()
-
-        footer = RoundedPanel(
+        queue_panel = RoundedPanel(
             surface,
             fill=THEME["surface"],
             border=THEME["line"],
-            radius=32,
-            padding=18,
+            radius=38,
+            padding=22,
         )
-        footer.place(relx=0.5, rely=0.84, anchor="s", relwidth=0.86, relheight=0.34)
-
-        if self.current_mode == "game":
-            self._render_game_placeholder(footer.content)
-            return
-
-        self._render_pending_footer(footer.content)
+        queue_panel.place(relx=0.5, rely=0.16, anchor="n", relwidth=0.9, relheight=0.76)
+        self._render_pending_queue(queue_panel.content)
 
     def _render_game_placeholder(self, parent):
         tk.Label(
@@ -572,25 +567,23 @@ class LanGoPiApp:
             justify="left",
         ).pack(anchor="w")
 
-    def _render_pending_footer(self, parent):
-        selected = self._selected_pending_item()
-
+    def _render_pending_queue(self, parent):
         header = tk.Frame(parent, bg=THEME["surface"])
-        header.pack(fill="x")
+        header.pack(fill="x", pady=(0, 12))
         tk.Label(
             header,
-            text="Learn Queue",
+            text="Pending Queue",
             bg=THEME["surface"],
             fg=THEME["muted"],
             font=META_FONT,
-        ).pack(side="left")
+        ).pack(anchor="w")
         tk.Label(
             header,
-            text=f"{len(self.pending_items)} pending",
+            text=f"{self.selected_language['label']} · newest {min(len(self.pending_items), MAX_HOME_PENDING)} of {len(self.pending_items)} pending",
             bg=THEME["surface"],
             fg=THEME["muted"],
-            font=("Avenir Next", 11),
-        ).pack(side="right")
+            font=("Avenir Next", 12, "bold"),
+        ).pack(anchor="w", pady=(4, 0))
 
         if not self.pending_items:
             tk.Label(
@@ -602,94 +595,100 @@ class LanGoPiApp:
             ).pack(anchor="center", pady=(28, 0))
             return
 
-        list_host = tk.Frame(parent, bg=THEME["surface"])
-        list_host.pack(fill="both", expand=True, pady=(14, 12))
+        rows = tk.Frame(parent, bg=THEME["surface"])
+        rows.pack(fill="both", expand=True)
 
-        canvas = tk.Canvas(list_host, bg=THEME["surface"], bd=0, highlightthickness=0, height=112)
-        scrollbar = ttk.Scrollbar(
-            list_host,
-            orient="horizontal",
-            style="LanGo.Horizontal.TScrollbar",
-            command=canvas.xview,
+        for pending in visible_pending_items(self.pending_items):
+            self._render_pending_row(rows, pending)
+
+    def _render_pending_row(self, parent, pending):
+        row = RoundedPanel(
+            parent,
+            fill=THEME["paper_strong"],
+            border=THEME["line"],
+            radius=30,
+            padding=14,
+            height=QUEUE_ROW_HEIGHT,
         )
-        rows = tk.Frame(canvas, bg=THEME["surface"])
-        rows.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=rows, anchor="nw")
-        canvas.configure(xscrollcommand=scrollbar.set)
-        canvas.pack(fill="both", expand=True)
-        scrollbar.pack(fill="x", pady=(8, 0))
+        row.pack(fill="x", pady=(0, 12))
+        body = row.content
+        body.grid_columnconfigure(1, weight=1)
 
-        for pending in self.pending_items:
-            self._render_pending_chip(rows, pending)
-
-        action_bar = tk.Frame(parent, bg=THEME["surface"])
-        action_bar.pack(fill="x")
-
-        if selected:
-            meta_text = f"{selected.get('english', '')} \u2192 {selected.get('translated', '')}  \u2022  {format_display_time(selected.get('createdAt'), '')}"
+        image = self._load_supported_photo(pending.get("image"), 72)
+        thumb_host = tk.Frame(body, bg=THEME["paper_strong"], width=78, height=78)
+        thumb_host.grid(row=0, column=0, rowspan=2, sticky="nsw", padx=(0, 14))
+        thumb_host.grid_propagate(False)
+        if image:
+            label = tk.Label(thumb_host, image=image, bg=THEME["paper_strong"])
+            label.image = image
+            label.place(relx=0.5, rely=0.5, anchor="center")
         else:
-            meta_text = "Select a detected word to confirm or reject it."
+            tk.Label(
+                thumb_host,
+                text="No\nImage",
+                bg=THEME["surface_alt"],
+                fg=THEME["muted"],
+                font=("Avenir Next", 11, "bold"),
+                width=7,
+                height=4,
+                justify="center",
+            ).place(relx=0.5, rely=0.5, anchor="center")
 
         tk.Label(
-            action_bar,
-            text=meta_text,
-            bg=THEME["surface"],
+            body,
+            text=pending.get("english", ""),
+            bg=THEME["paper_strong"],
+            fg=THEME["ink"],
+            font=("Avenir Next", 18, "bold"),
+            anchor="w",
+        ).grid(row=0, column=1, sticky="w")
+        tk.Label(
+            body,
+            text=pending.get("translated", ""),
+            bg=THEME["paper_strong"],
             fg=THEME["muted"],
-            font=("Avenir Next", 12),
-        ).pack(side="left")
+            font=("Avenir Next", 14, "bold"),
+            anchor="w",
+        ).grid(row=1, column=1, sticky="w", pady=(6, 0))
+        tk.Label(
+            body,
+            text=format_display_time(pending.get("createdAt"), ""),
+            bg=THEME["paper_strong"],
+            fg=THEME["muted"],
+            font=("Avenir Next", 11),
+            anchor="w",
+        ).grid(row=2, column=1, sticky="w", pady=(8, 0))
 
-        controls = tk.Frame(action_bar, bg=THEME["surface"])
-        controls.pack(side="right")
+        controls = tk.Frame(body, bg=THEME["paper_strong"])
+        controls.grid(row=0, column=2, rowspan=3, sticky="nse", padx=(14, 0))
         RoundedButton(
             controls,
-            text="Add to History",
-            command=self._confirm_selected_pending,
-            width=236,
-            height=68,
-            radius=30,
-            fill=THEME["accent"] if selected else THEME["accent_soft"],
+            text="Save",
+            command=lambda item=pending: self._confirm_pending_item(item),
+            width=118,
+            height=46,
+            radius=22,
+            fill=THEME["accent"],
             active_fill=THEME["accent_strong"],
             pressed_fill=THEME["accent_strong"],
-            text_color=THEME["paper_strong"] if selected else THEME["muted"],
-            font=TOUCH_FONT_SMALL,
+            text_color=THEME["paper_strong"],
+            font=("Avenir Next", 15, "bold"),
             border=THEME["line"],
-            disabled=not selected,
-        ).pack(side="left", padx=(0, 10))
+        ).pack(pady=(0, 8))
         RoundedButton(
             controls,
-            text="Reject",
-            command=self._reject_selected_pending,
-            width=156,
-            height=68,
-            radius=30,
+            text="Discard",
+            command=lambda item=pending: self._reject_pending_item(item),
+            width=118,
+            height=46,
+            radius=22,
             fill=THEME["surface_alt"],
             active_fill=THEME["warm"],
             pressed_fill=THEME["warm"],
             text_color=THEME["ink"],
-            font=TOUCH_FONT_SMALL,
+            font=("Avenir Next", 15, "bold"),
             border=THEME["line"],
-            disabled=not selected,
-        ).pack(side="left")
-
-    def _render_pending_chip(self, parent, pending):
-        is_selected = pending.get("pendingId") == self.selected_pending_id
-        chip = RoundedButton(
-            parent,
-            text=pending.get("english", ""),
-            subtitle=pending.get("translated", ""),
-            command=lambda pending_id=pending["pendingId"]: self._select_pending(pending_id),
-            width=220,
-            height=92,
-            radius=30,
-            fill=THEME["accent"] if is_selected else THEME["surface_alt"],
-            active_fill=THEME["accent_soft"] if is_selected else THEME["paper_strong"],
-            pressed_fill=THEME["accent_strong"] if is_selected else THEME["surface"],
-            text_color=THEME["paper_strong"] if is_selected else THEME["ink"],
-            subtitle_color=THEME["paper"] if is_selected else THEME["muted"],
-            font=CHIP_TITLE_FONT,
-            border=THEME["line"],
-        )
-        chip.pack(side="left", padx=(0, 12))
+        ).pack()
 
     def _render_settings_screen(self):
         stage = self._make_stage(self.content_frame)
@@ -918,9 +917,9 @@ class LanGoPiApp:
             _, pending_payload = list_pending(language_key=language_key, server_base=self.server_base)
             _, history_payload = get_history(language_key=language_key, server_base=self.server_base)
 
-            self.pending_items = pending_payload.get("pending", [])
+            self.pending_items = visible_pending_items(pending_payload.get("pending", []))
             self.history_entries = history_payload.get("entries", [])
-            self.selected_pending_id = choose_selected_pending_id(self.pending_items, self.selected_pending_id)
+            self.selected_pending_id = None
             self._set_status(
                 f"{self.selected_language['label']} ready. {len(self.pending_items)} item{'s' if len(self.pending_items) != 1 else ''} waiting.",
                 "success",
@@ -932,16 +931,6 @@ class LanGoPiApp:
                 self._render_screen()
             self._schedule_refresh()
 
-    def _selected_pending_item(self):
-        for pending in self.pending_items:
-            if pending.get("pendingId") == self.selected_pending_id:
-                return pending
-        return None
-
-    def _select_pending(self, pending_id):
-        self.selected_pending_id = pending_id
-        self._render_screen()
-
     def _handle_language_change(self, language_key):
         try:
             _, payload = set_selected_language(language_key, server_base=self.server_base)
@@ -952,25 +941,19 @@ class LanGoPiApp:
         except Exception as exc:
             self._set_status(f"Could not switch language: {exc}", "error")
 
-    def _confirm_selected_pending(self):
-        selected = self._selected_pending_item()
-        if not selected:
-            return
+    def _confirm_pending_item(self, pending):
         try:
-            _, payload = confirm_pending(selected["pendingId"], server_base=self.server_base)
+            _, payload = confirm_pending(pending["pendingId"], server_base=self.server_base)
             entry = payload.get("entry", {})
-            self._set_status(f"Saved {entry.get('english', selected.get('english', 'item'))} to history.", "success")
+            self._set_status(f"Saved {entry.get('english', pending.get('english', 'item'))} to history.", "success")
             self._refresh_data()
         except Exception as exc:
             self._set_status(f"Could not add item to history: {exc}", "error")
 
-    def _reject_selected_pending(self):
-        selected = self._selected_pending_item()
-        if not selected:
-            return
+    def _reject_pending_item(self, pending):
         try:
-            reject_pending(selected["pendingId"], server_base=self.server_base)
-            self._set_status(f"Rejected {selected.get('english', 'item')}.", "success")
+            reject_pending(pending["pendingId"], server_base=self.server_base)
+            self._set_status(f"Discarded {pending.get('english', 'item')}.", "success")
             self._refresh_data()
         except Exception as exc:
             self._set_status(f"Could not reject item: {exc}", "error")

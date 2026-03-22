@@ -256,7 +256,7 @@ class LanGoHandler(SimpleHTTPRequestHandler):
 
         try:
             language_key = resolve_detection_language_key(payload)
-            pending, created = detection_workflow.submit_detection(
+            pending, created, discarded_entries = detection_workflow.submit_detection(
                 language_key=language_key,
                 english=english,
                 image=payload.get("image"),
@@ -268,8 +268,18 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             self._write_json({"error": "Failed to create pending detection.", "details": str(exc)}, status=HTTPStatus.BAD_GATEWAY)
             return
 
+        for discarded_entry in discarded_entries:
+            image_file = resolve_managed_image_file(discarded_entry.get("image"))
+            if image_file and image_file.exists():
+                image_file.unlink(missing_ok=True)
+
         self._write_json(
-            {"entry": pending, "pending": pending, "created": created},
+            {
+                "entry": pending,
+                "pending": pending,
+                "created": created,
+                "discardedPendingIds": [entry["pendingId"] for entry in discarded_entries],
+            },
             status=HTTPStatus.CREATED if created else HTTPStatus.OK,
         )
 

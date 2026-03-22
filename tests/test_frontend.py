@@ -81,19 +81,21 @@ class FrontendSmokeTests(unittest.TestCase):
         self.assertIn("Delete", script)
         self.assertIn(".delete-button", styles)
 
-    def test_frontend_supports_pending_detection_confirmation_panel(self):
+    def test_frontend_no_longer_renders_pending_detection_panel(self):
         script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
         styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")
-        self.assertIn("/api/detections/pending", script)
-        self.assertIn("/api/detections/confirm", script)
-        self.assertIn("/api/detections/reject", script)
-        self.assertIn("Pending Detection", script)
-        self.assertIn(".pending-card", styles)
+        self.assertNotIn("/api/detections/pending", script)
+        self.assertNotIn("/api/detections/confirm", script)
+        self.assertNotIn("/api/detections/reject", script)
+        self.assertNotIn("Pending Detection", script)
+        self.assertNotIn(".pending-card", styles)
+        self.assertNotIn(".pending-panel", styles)
 
-    def test_frontend_dedups_existing_history_entry_when_confirming_pending(self):
+    def test_frontend_no_longer_manages_pending_confirmation_state(self):
         script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
-        self.assertIn("function sameHistoryEntry", script)
-        self.assertIn("currentEntries.filter((item) => !sameHistoryEntry(item, payload.entry))", script)
+        self.assertNotIn("pendingDetections", script)
+        self.assertNotIn("pendingActionId", script)
+        self.assertNotIn("sameHistoryEntry", script)
 
     def test_pi_panel_supports_device_language_selection(self):
         script = (ROOT_DIR / "frontend" / "pi-panel.js").read_text(encoding="utf-8")

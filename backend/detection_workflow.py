@@ -37,7 +37,7 @@ class DetectionWorkflow:
         if existing:
             if image and not existing.get("image"):
                 existing["image"] = image
-            return existing, False
+            return existing, False, []
 
         target_language = TARGET_LANGUAGE_NAMES.get(normalized_language, normalized_language.title())
         translated, _ = self.translator.translate_text(normalized_english, target_language=target_language, source_language="English")
@@ -53,8 +53,9 @@ class DetectionWorkflow:
 
         language_queue = self._pending.setdefault(normalized_language, [])
         language_queue.insert(0, pending_entry)
+        discarded_entries = language_queue[self.max_pending_per_language :]
         del language_queue[self.max_pending_per_language :]
-        return pending_entry, True
+        return pending_entry, True, discarded_entries
 
     def confirm_pending(self, pending_id, store):
         pending_entry = self._pop_pending(pending_id)
