@@ -244,7 +244,7 @@ def main():
 
                 touched = 0
 
-        cv2.imshow("LanGo", frame)
+        # cv2.imshow("LanGo", frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
