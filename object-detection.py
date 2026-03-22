@@ -2,10 +2,8 @@ import cv2
 import mediapipe as mp
 import time
 from ultralytics import YOLO
+import math
 import os
-from pathlib import Path
-
-from hardware.detection_client import get_selected_language, submit_detection
 
 # as hand is detected, will first check for pinching gesture. 
 # if pinching gesture is detected: save first x, y then save x,y when pinch gesture is let go
@@ -45,12 +43,6 @@ label_map = {
 # Webcam
 # -----------------------
 cap = cv2.VideoCapture(0)
-SERVER_BASE = os.environ.get("LANGO_SERVER_BASE", "http://127.0.0.1:8000")
-TARGET_LANGUAGE_KEY = os.environ.get("LANGO_LANGUAGE_KEY", "spanish")
-CAPTURE_DIR = Path("frontend/assets/captures")
-CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
-DETECTION_COOLDOWN_SECONDS = float(os.environ.get("LANGO_DETECTION_COOLDOWN_SECONDS", "5"))
-LANGUAGE_REFRESH_SECONDS = float(os.environ.get("LANGO_LANGUAGE_REFRESH_SECONDS", "2"))
 
 # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -81,7 +73,6 @@ while True:
 
     if hand_results.multi_hand_landmarks:
         yolo_results = model(frame, verbose=False)[0] #YOLO results
-        active_language_key = refresh_selected_language(time.time())
 
         hand_landmarks = hand_results.multi_hand_landmarks[0]
 
