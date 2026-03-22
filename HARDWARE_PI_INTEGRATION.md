@@ -74,7 +74,7 @@ Return payload shape:
 
 Function:
 
-- `submit_detection(language_key, english, image=None, server_base=SERVER_BASE)`
+- `submit_detection(english, image=None, language_key=None, server_base=SERVER_BASE)`
 
 Defined at:
 
@@ -84,9 +84,9 @@ Use this when YOLO has identified an object and you want LanGo to create a pendi
 
 Arguments:
 
-- `language_key`: one of `arabic`, `chinese`, `french`, `japanese`, `portuguese`, `russian`, `spanish`
 - `english`: detected English label, for example `apple`, `shoe`, `bottle`
 - `image`: optional frontend-served image path such as `./assets/captures/apple-123.jpg`
+- `language_key`: optional explicit override. If omitted, the backend uses the currently selected device language.
 - `server_base`: base URL like `http://127.0.0.1:8001`
 
 Return shape:
@@ -99,6 +99,15 @@ Typical payload:
 
 ```json
 {
+  "entry": {
+    "pendingId": "abc123def456",
+    "languageKey": "spanish",
+    "english": "apple",
+    "translated": "manzana",
+    "speech": "manzana",
+    "image": "./assets/captures/apple-123.jpg",
+    "createdAt": "2026-03-21T19:55:00-04:00"
+  },
   "pending": {
     "pendingId": "abc123def456",
     "languageKey": "spanish",
@@ -364,7 +373,7 @@ Important behavior:
 - selected device language is persisted in `data/device_language.json`
 - the detector reads that selected language and applies it to future submissions
 - detector crop images are written into `frontend/assets/captures/` as PNG files
-- translation happens when `submit_detection(...)` is called
+- translation happens when `submit_detection(...)` is called, even if the detector only sends the English label
 - queue items are stored in memory on the backend
 - pending detections are deduped by `english` within each language
 - confirmed detections are inserted into SQLite
@@ -377,7 +386,7 @@ A fully functioning Pi-side Python file should:
 - read the selected `language_key`
 - let the user change `language_key` on the Pi screen
 - run detection or receive a detected word
-- call `submit_detection(language_key, english, image)`
+- call `submit_detection(english, image=image, language_key=language_key)`
 - store the returned `pendingId`
 - show a scrollable queue UI on the Pi screen
 - allow the user to select which pending word to act on
@@ -395,8 +404,7 @@ SERVER_BASE = "http://127.0.0.1:8001"
 LANGUAGE_KEY = "spanish"
 
 status, payload = submit_detection(
-    language_key=LANGUAGE_KEY,
-    english="apple",
+    "apple",
     image="./assets/captures/apple-123.jpg",
     server_base=SERVER_BASE,
 )

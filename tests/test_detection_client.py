@@ -21,6 +21,26 @@ class FakeResponse:
 
 
 class DetectionClientTests(unittest.TestCase):
+    def test_submit_detection_can_omit_language_key(self):
+        with patch.object(
+            detection_client.request,
+            "urlopen",
+            return_value=FakeResponse(201, {"entry": {"english": "book", "translated": "libro"}, "created": True}),
+        ) as mocked_urlopen:
+            status, payload = detection_client.submit_detection(
+                "book",
+                image="./assets/captures/book.jpg",
+                server_base="http://127.0.0.1:9000",
+            )
+
+        self.assertEqual(status, 201)
+        self.assertEqual(payload["entry"]["translated"], "libro")
+        request_object = mocked_urlopen.call_args.args[0]
+        body = json.loads(request_object.data.decode("utf-8"))
+        self.assertEqual(body["english"], "book")
+        self.assertEqual(body["image"], "./assets/captures/book.jpg")
+        self.assertNotIn("languageKey", body)
+
     def test_get_history_reads_language_specific_history(self):
         with patch.object(
             detection_client.request,

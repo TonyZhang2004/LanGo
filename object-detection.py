@@ -214,12 +214,7 @@ def main():
                         cv2.imwrite(filepath, crop)
 
                         entry = {
-                            "languageKey": "spanish",
                             "english": clean_label,
-                            "translated": "n",
-                            "speech": "n",
-                            "image": None,
-                            "time": current_time_label(),
                         }
                         log_new_item(entry, filepath)
 
