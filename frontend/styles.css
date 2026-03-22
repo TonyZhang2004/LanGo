@@ -146,7 +146,8 @@ body::before {
 }
 
 .controls-panel,
-.history-panel {
+.history-panel,
+.pending-panel {
   border: 1px solid var(--line);
   border-radius: 32px;
   padding: 28px;
@@ -217,6 +218,41 @@ body::before {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+.pending-card {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: center;
+  margin-top: 22px;
+  padding: 18px;
+  border-radius: 30px;
+  border: 1px solid rgba(21, 23, 25, 0.06);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.7));
+  box-shadow: var(--card-shadow);
+}
+
+.pending-thumb {
+  max-width: 180px;
+}
+
+.pending-copy {
+  min-width: 0;
+}
+
+.pending-meta {
+  margin: 8px 0 0;
+}
+
+.pending-actions {
+  display: grid;
+  gap: 12px;
+  justify-items: end;
+}
+
+.pending-button {
+  min-width: 148px;
 }
 
 .history-list {
@@ -396,6 +432,7 @@ body::before {
     display: none;
   }
 
+  .pending-card,
   .history-card {
     grid-template-columns: 1fr;
   }

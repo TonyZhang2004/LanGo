@@ -8,31 +8,25 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
+from backend.detection_workflow import DetectionWorkflow
 from backend.groq_audio_translation import GroqAudioTranslator
+from backend.language_state import DeviceLanguageState, SUPPORTED_LANGUAGES
 from backend.translation_store import TranslationStore
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
+CAPTURES_DIR = FRONTEND_DIR / "assets" / "captures"
 UPLOADS_DIR = FRONTEND_DIR / "assets" / "uploads"
 HOST = os.environ.get("HOST", "127.0.0.1").strip() or "127.0.0.1"
 PORT = int(os.environ.get("PORT", "8000"))
 translator = GroqAudioTranslator()
 translation_store = TranslationStore()
+detection_workflow = DetectionWorkflow(translator=translator)
+device_language_state = DeviceLanguageState()
 
 
-LANGUAGE_CODES = {
-    "arabic": "Arabic",
-    "bengali": "Bengali",
-    "chinese": "Mandarin Chinese",
-    "french": "French",
-    "hindi": "Hindi",
-    "indonesian": "Indonesian",
-    "japanese": "Japanese",
-    "portuguese": "Portuguese",
-    "russian": "Russian",
-    "spanish": "Spanish",
-}
+LANGUAGE_CODES = {key: value["label"] for key, value in SUPPORTED_LANGUAGES.items()}
 
 
 def resolve_target_language(language_key):
@@ -68,10 +62,12 @@ def save_uploaded_image(entry_id, filename, payload_bytes):
     return image_path, file_path
 
 
-def resolve_uploaded_image_file(image_path):
-    if not image_path or not str(image_path).startswith("./assets/uploads/"):
+def resolve_managed_image_file(image_path):
+    if not image_path:
         return None
     relative_path = str(image_path).removeprefix("./")
+    if not (relative_path.startswith("assets/uploads/") or relative_path.startswith("assets/captures/")):
+        return None
     return FRONTEND_DIR / relative_path
 
 
@@ -91,6 +87,12 @@ class LanGoHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/health":
             self._write_json({"status": "ok"})
             return
+        if parsed.path == "/api/detections/pending":
+            self._handle_pending_detection_get(parsed)
+            return
+        if parsed.path == "/api/device/language":
+            self._handle_device_language_get()
+            return
         if parsed.path == "/api/history":
             self._handle_history_get(parsed)
             return
@@ -101,6 +103,18 @@ class LanGoHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/detections":
+            self._handle_detection_submit()
+            return
+        if parsed.path == "/api/detections/confirm":
+            self._handle_detection_confirm()
+            return
+        if parsed.path == "/api/detections/reject":
+            self._handle_detection_reject()
+            return
+        if parsed.path == "/api/device/language":
+            self._handle_device_language_post()
+            return
         if parsed.path == "/api/history":
             self._handle_history_post()
             return
@@ -121,6 +135,15 @@ class LanGoHandler(SimpleHTTPRequestHandler):
         language_key = params.get("language", ["spanish"])[0].strip().lower()
         entries = translation_store.list_entries(language_key)
         self._write_json({"entries": entries})
+
+    def _handle_device_language_get(self):
+        self._write_json(device_language_state.get_selected_language())
+
+    def _handle_pending_detection_get(self, parsed):
+        params = parse_qs(parsed.query)
+        language_key = params.get("language", [""])[0].strip().lower()
+        pending = detection_workflow.list_pending(language_key or None)
+        self._write_json({"pending": pending})
 
     def _handle_history_post(self):
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -163,6 +186,88 @@ class LanGoHandler(SimpleHTTPRequestHandler):
         )
         self._write_json({"entry": entry, "created": True}, status=HTTPStatus.CREATED)
 
+    def _handle_detection_submit(self):
+        payload = self._read_json_body()
+        if payload is None:
+            return
+
+        required_fields = ["languageKey", "english"]
+        missing = [field for field in required_fields if not payload.get(field)]
+        if missing:
+            self._write_json(
+                {"error": f"Missing required fields: {', '.join(missing)}"},
+                status=HTTPStatus.BAD_REQUEST,
+            )
+            return
+
+        try:
+            pending, created = detection_workflow.submit_detection(
+                language_key=payload["languageKey"].strip().lower(),
+                english=payload["english"].strip(),
+                image=payload.get("image"),
+            )
+        except Exception as exc:
+            self._write_json({"error": "Failed to create pending detection.", "details": str(exc)}, status=HTTPStatus.BAD_GATEWAY)
+            return
+
+        self._write_json({"pending": pending, "created": created}, status=HTTPStatus.CREATED if created else HTTPStatus.OK)
+
+    def _handle_detection_confirm(self):
+        payload = self._read_json_body()
+        if payload is None:
+            return
+
+        pending_id = str(payload.get("pendingId", "")).strip()
+        if not pending_id:
+            self._write_json({"error": "Missing pendingId."}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        entry = detection_workflow.confirm_pending(pending_id, translation_store)
+        if not entry:
+            self._write_json({"error": "Pending detection not found."}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        self._write_json({"entry": entry}, status=HTTPStatus.CREATED)
+
+    def _handle_detection_reject(self):
+        payload = self._read_json_body()
+        if payload is None:
+            return
+
+        pending_id = str(payload.get("pendingId", "")).strip()
+        if not pending_id:
+            self._write_json({"error": "Missing pendingId."}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        pending = detection_workflow.reject_pending(pending_id)
+        if not pending:
+            self._write_json({"error": "Pending detection not found."}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        image_file = resolve_managed_image_file(pending.get("image"))
+        if image_file and image_file.exists():
+            image_file.unlink(missing_ok=True)
+
+        self._write_json({"rejected": True, "pendingId": pending_id}, status=HTTPStatus.OK)
+
+    def _handle_device_language_post(self):
+        payload = self._read_json_body()
+        if payload is None:
+            return
+
+        language_key = str(payload.get("languageKey", "")).strip()
+        if not language_key:
+            self._write_json({"error": "Missing languageKey."}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        try:
+            selected_language = device_language_state.set_selected_language(language_key)
+        except ValueError as exc:
+            self._write_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        self._write_json(selected_language, status=HTTPStatus.OK)
+
     def _handle_upload_image(self, parsed):
         params = parse_qs(parsed.query)
         entry_id = params.get("entryId", [""])[0].strip()
@@ -198,7 +303,7 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             self._write_json({"error": "Translation entry not found."}, status=HTTPStatus.NOT_FOUND)
             return
 
-        image_file = resolve_uploaded_image_file(entry.get("image"))
+        image_file = resolve_managed_image_file(entry.get("image"))
         deleted = translation_store.delete_entry(entry_id)
         if not deleted:
             self._write_json({"error": "Translation entry not found."}, status=HTTPStatus.NOT_FOUND)
@@ -289,6 +394,18 @@ class LanGoHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _read_json_body(self):
+        content_length = int(self.headers.get("Content-Length", "0"))
+        if content_length <= 0:
+            self._write_json({"error": "Missing request body."}, status=HTTPStatus.BAD_REQUEST)
+            return None
+
+        try:
+            return json.loads(self.rfile.read(content_length).decode("utf-8"))
+        except json.JSONDecodeError:
+            self._write_json({"error": "Request body must be valid JSON."}, status=HTTPStatus.BAD_REQUEST)
+            return None
 
 
 def run():

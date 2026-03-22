@@ -1,5 +1,6 @@
 import sqlite3
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 
 
@@ -73,11 +74,13 @@ class TranslationStore:
                     speech TEXT NOT NULL,
                     image TEXT,
                     time_label TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at_local TEXT
                 )
                 """
             )
             self._migrate_nullable_image_column(connection)
+            self._migrate_created_at_local_column(connection)
             self._remove_demo_entries(connection)
             self._enforce_all_language_limits(connection)
             connection.commit()
@@ -99,21 +102,37 @@ class TranslationStore:
                 speech TEXT NOT NULL,
                 image TEXT,
                 time_label TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at_local TEXT
             )
             """
         )
         connection.execute(
             """
             INSERT INTO translation_entries (
-                id, language_key, english, translated, speech, image, time_label, created_at
+                id, language_key, english, translated, speech, image, time_label, created_at, created_at_local
             )
             SELECT
-                id, language_key, english, translated, speech, image, time_label, created_at
+                id, language_key, english, translated, speech, image, time_label, created_at, NULL
             FROM translation_entries_old
             """
         )
         connection.execute("DROP TABLE translation_entries_old")
+
+    def _migrate_created_at_local_column(self, connection):
+        columns = connection.execute("PRAGMA table_info(translation_entries)").fetchall()
+        column_names = {column["name"] for column in columns}
+        if "created_at_local" not in column_names:
+            connection.execute("ALTER TABLE translation_entries ADD COLUMN created_at_local TEXT")
+
+        connection.execute(
+            """
+            UPDATE translation_entries
+            SET created_at_local = replace(created_at, ' ', 'T') || 'Z'
+            WHERE created_at_local IS NULL
+              AND created_at IS NOT NULL
+            """
+        )
 
     def _remove_demo_entries(self, connection):
         for language_key, entries in DEMO_ENTRIES.items():
@@ -168,7 +187,7 @@ class TranslationStore:
         with closing(self._connect()) as connection:
             rows = connection.execute(
                 """
-                SELECT id, language_key, english, translated, speech, image, time_label, created_at
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at, created_at_local
                 FROM translation_entries
                 WHERE language_key = ?
                 ORDER BY id DESC
@@ -182,7 +201,7 @@ class TranslationStore:
         with closing(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT id, language_key, english, translated, speech, image, time_label, created_at
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at, created_at_local
                 FROM translation_entries
                 WHERE language_key = ?
                   AND lower(trim(english)) = lower(trim(?))
@@ -197,7 +216,7 @@ class TranslationStore:
         with closing(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT id, language_key, english, translated, speech, image, time_label, created_at
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at, created_at_local
                 FROM translation_entries
                 WHERE id = ?
                 """,
@@ -211,20 +230,22 @@ class TranslationStore:
             return existing
 
         image_value = self._normalize_image(image)
+        local_now = self._machine_local_now()
+        effective_time_label = time_label or local_now.strftime("%I:%M %p").lstrip("0")
 
         with closing(self._connect()) as connection:
             cursor = connection.execute(
                 """
                 INSERT INTO translation_entries (
-                    language_key, english, translated, speech, image, time_label
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    language_key, english, translated, speech, image, time_label, created_at_local
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (language_key, english, translated, speech, image_value, time_label),
+                (language_key, english, translated, speech, image_value, effective_time_label, local_now.isoformat(timespec="seconds")),
             )
             self._enforce_language_limit(connection, language_key)
             row = connection.execute(
                 """
-                SELECT id, language_key, english, translated, speech, image, time_label, created_at
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at, created_at_local
                 FROM translation_entries
                 WHERE id = ?
                 """,
@@ -242,7 +263,7 @@ class TranslationStore:
             )
             row = connection.execute(
                 """
-                SELECT id, language_key, english, translated, speech, image, time_label, created_at
+                SELECT id, language_key, english, translated, speech, image, time_label, created_at, created_at_local
                 FROM translation_entries
                 WHERE id = ?
                 """,
@@ -266,6 +287,16 @@ class TranslationStore:
         image_text = str(image).strip()
         return image_text or None
 
+    def _machine_local_now(self):
+        return datetime.now().astimezone()
+
+    def _serialize_created_at(self, row):
+        if row["created_at_local"]:
+            return row["created_at_local"]
+        if row["created_at"]:
+            return str(row["created_at"]).replace(" ", "T") + "Z"
+        return None
+
     def _serialize_row(self, row):
         return {
             "id": str(row["id"]),
@@ -276,5 +307,5 @@ class TranslationStore:
             "lang": LANGUAGE_LOCALES.get(row["language_key"]),
             "image": row["image"],
             "time": row["time_label"],
-            "createdAt": row["created_at"],
+            "createdAt": self._serialize_created_at(row),
         }

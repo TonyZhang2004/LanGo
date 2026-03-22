@@ -2,8 +2,10 @@ import cv2
 import mediapipe as mp
 import time
 from ultralytics import YOLO
-import math
 import os
+from pathlib import Path
+
+from hardware.detection_client import get_selected_language, submit_detection
 
 # as hand is detected, will first check for pinching gesture. 
 # if pinching gesture is detected: save first x, y then save x,y when pinch gesture is let go
@@ -42,12 +44,38 @@ label_map = {
 # Webcam
 # -----------------------
 cap = cv2.VideoCapture(0)
+SERVER_BASE = os.environ.get("LANGO_SERVER_BASE", "http://127.0.0.1:8000")
+TARGET_LANGUAGE_KEY = os.environ.get("LANGO_LANGUAGE_KEY", "spanish")
+CAPTURE_DIR = Path("frontend/assets/captures")
+CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+DETECTION_COOLDOWN_SECONDS = float(os.environ.get("LANGO_DETECTION_COOLDOWN_SECONDS", "5"))
+LANGUAGE_REFRESH_SECONDS = float(os.environ.get("LANGO_LANGUAGE_REFRESH_SECONDS", "2"))
 
 # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
 frame_timestamp = 0
-vocab_words = [] # words from detected objects
+last_submitted_at = {}
+current_language_key = TARGET_LANGUAGE_KEY
+last_language_refresh_at = 0.0
+
+
+def refresh_selected_language(now):
+    global current_language_key, last_language_refresh_at
+    if now - last_language_refresh_at < LANGUAGE_REFRESH_SECONDS:
+        return current_language_key
+
+    last_language_refresh_at = now
+    try:
+        status, payload = get_selected_language(server_base=SERVER_BASE)
+        selected = payload.get("selectedLanguage", {}).get("key")
+        if selected:
+            if selected != current_language_key:
+                print(f"Switched detector language from {current_language_key} to {selected} (HTTP {status}).")
+            current_language_key = selected
+    except Exception as exc:
+        print(f"Could not refresh selected language; keeping {current_language_key}: {exc}")
+    return current_language_key
 
 while True:
     ret, frame = cap.read()
@@ -63,6 +91,7 @@ while True:
 
     if hand_results.multi_hand_landmarks:
         yolo_results = model(frame, verbose=False)[0] #YOLO results
+        active_language_key = refresh_selected_language(time.time())
 
         hand_landmarks = hand_results.multi_hand_landmarks[0]
 
@@ -101,12 +130,31 @@ while True:
             cls = int(obj.cls[0])
             label = model.names[cls]
             clean_label = label_map.get(label, label)
-            if clean_label not in vocab_words: #create image + word if not in vocab list already
-                vocab_words.append(clean_label)
-                filename = f"{clean_label.replace(' ', '_').lower()}.jpg"
-                filepath = os.path.join("images", filename)
+            now = time.time()
+            cooldown_key = f"{active_language_key}:{clean_label.lower()}"
+            last_seen = last_submitted_at.get(cooldown_key, 0)
+            if now - last_seen >= DETECTION_COOLDOWN_SECONDS:
+                filename = f"{clean_label.replace(' ', '_').lower()}-{int(now * 1000)}.jpg"
+                filepath = CAPTURE_DIR / filename
+                relative_path = f"./assets/captures/{filename}"
                 crop = frame[y1:y2, x1:x2]
-                cv2.imwrite(filepath, crop)
+                if crop.size == 0:
+                    continue
+                cv2.imwrite(str(filepath), crop)
+                try:
+                    status, payload = submit_detection(
+                        language_key=active_language_key,
+                        english=clean_label,
+                        image=relative_path,
+                        server_base=SERVER_BASE,
+                    )
+                    last_submitted_at[cooldown_key] = now
+                    print(
+                        f"Submitted detection {clean_label} for {active_language_key} "
+                        f"with HTTP {status}: {payload}"
+                    )
+                except Exception as exc:
+                    print(f"Failed to submit detection for {clean_label}: {exc}")
 
             # cv2.rectangle(frame,
             #           (int(x1), int(y1)),
@@ -116,10 +164,6 @@ while True:
             #             (int(x1), int(y1) - 5),
             #             cv2.FONT_HERSHEY_SIMPLEX,
             #             0.5, (0,255,0), 2)
-
-
-
-    print(vocab_words)
     cv2.imshow("LanGo", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):

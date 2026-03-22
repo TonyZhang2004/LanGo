@@ -162,14 +162,80 @@ function TranslationCard({ entry, isPlaying, isDeleting, onPlay, onDelete }) {
   );
 }
 
+function PendingDetectionCard({ pending, isActing, onConfirm, onReject }) {
+  const displayTime = formatFullDateTime(pending.createdAt, "");
+  return h(
+    "article",
+    { className: "pending-card" },
+    h(
+      "div",
+      { className: "thumb-wrap pending-thumb" },
+      h("img", {
+        className: `thumb ${pending.image ? "" : "thumb is-placeholder"}`.trim(),
+        src: pending.image || defaultImage,
+        alt: pending.image ? `${pending.english} detected object` : `${pending.english} detected object without image`,
+      })
+    ),
+    h(
+      "div",
+      { className: "pending-copy" },
+      h("p", { className: "section-kicker" }, "Pending Detection"),
+      h("p", { className: "word english" }, pending.english),
+      h("p", { className: "word translated" }, pending.translated),
+      h("p", { className: "history-meta pending-meta" }, displayTime)
+    ),
+    h(
+      "div",
+      { className: "pending-actions" },
+      h(
+        "button",
+        {
+          className: "sync-button pending-button",
+          type: "button",
+          disabled: isActing,
+          onClick: onConfirm,
+        },
+        isActing ? "Saving..." : "Add To History"
+      ),
+      h(
+        "button",
+        {
+          className: "delete-button pending-button",
+          type: "button",
+          disabled: isActing,
+          onClick: onReject,
+        },
+        isActing ? "Waiting..." : "Reject"
+      )
+    )
+  );
+}
+
+function sameHistoryEntry(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  if (left.id && right.id && left.id === right.id) {
+    return true;
+  }
+
+  return (
+    String(left.english || "").trim().toLowerCase() === String(right.english || "").trim().toLowerCase()
+  );
+}
+
 function App() {
   const [selectedLanguage, setSelectedLanguage] = useState("spanish");
   const [translationsByLanguage, setTranslationsByLanguage] = useState(fallbackTranslations);
+  const [pendingDetections, setPendingDetections] = useState([]);
   const [playingId, setPlayingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [pendingActionId, setPendingActionId] = useState(null);
   const [lastSyncTime, setLastSyncTime] = useState("Not synced yet");
   const [audioError, setAudioError] = useState("");
   const [historyError, setHistoryError] = useState("");
+  const [pendingError, setPendingError] = useState("");
   const [voiceNotice, setVoiceNotice] = useState("");
   const [syncNonce, setSyncNonce] = useState(0);
 
@@ -246,6 +312,36 @@ function App() {
     };
   }, [selectedLanguage, syncNonce]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPending() {
+      try {
+        const response = await fetch(`/api/detections/pending?language=${encodeURIComponent(selectedLanguage)}`);
+        if (!response.ok) {
+          throw new Error(`Pending request failed with status ${response.status}`);
+        }
+        const payload = await response.json();
+        if (!cancelled) {
+          setPendingDetections(payload.pending || []);
+          setPendingError("");
+        }
+      } catch (_error) {
+        if (!cancelled) {
+          setPendingDetections([]);
+          setPendingError("Could not load pending detections.");
+        }
+      }
+    }
+
+    loadPending();
+    const timerId = window.setInterval(loadPending, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timerId);
+    };
+  }, [selectedLanguage]);
+
   const entries = translationsByLanguage[selectedLanguage] || [];
 
   const handlePlayAudio = async (entry) => {
@@ -263,6 +359,13 @@ function App() {
   };
 
   const handleDeleteEntry = async (entry) => {
+    const confirmed = window.confirm(
+      `Delete this translation history entry?\n\n${entry.english} ↔ ${entry.translated}`
+    );
+    if (!confirmed) {
+      return;
+    }
+
     setHistoryError("");
     setDeletingId(entry.id);
     try {
@@ -285,6 +388,54 @@ function App() {
       setHistoryError("Could not delete translation entry.");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleConfirmPending = async (pending) => {
+    setPendingError("");
+    setPendingActionId(pending.pendingId);
+    try {
+      const response = await fetch("/api/detections/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingId: pending.pendingId }),
+      });
+      if (!response.ok) {
+        throw new Error(`Confirm request failed with status ${response.status}`);
+      }
+      const payload = await response.json();
+      setPendingDetections((current) => current.filter((item) => item.pendingId !== pending.pendingId));
+      setTranslationsByLanguage((current) => {
+        const currentEntries = current[selectedLanguage] || [];
+        const dedupedEntries = currentEntries.filter((item) => !sameHistoryEntry(item, payload.entry));
+        const nextEntries = [payload.entry, ...dedupedEntries].slice(0, 10);
+        return { ...current, [selectedLanguage]: nextEntries };
+      });
+      stampSyncTime();
+    } catch (_error) {
+      setPendingError("Could not add detected word to translation history.");
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleRejectPending = async (pending) => {
+    setPendingError("");
+    setPendingActionId(pending.pendingId);
+    try {
+      const response = await fetch("/api/detections/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingId: pending.pendingId }),
+      });
+      if (!response.ok) {
+        throw new Error(`Reject request failed with status ${response.status}`);
+      }
+      setPendingDetections((current) => current.filter((item) => item.pendingId !== pending.pendingId));
+    } catch (_error) {
+      setPendingError("Could not reject detected word.");
+    } finally {
+      setPendingActionId(null);
     }
   };
 
@@ -351,6 +502,37 @@ function App() {
           ),
           h("span", { className: "picker-icon", "aria-hidden": "true" }, "⌄")
         )
+      ),
+      h(
+        "section",
+        { className: "controls-panel pending-panel" },
+        h(
+          "div",
+          { className: "section-heading" },
+          h("p", { className: "section-kicker" }, "Raspberry Pi Queue"),
+          h("h2", null, "Pending Detection"),
+          h(
+            "p",
+            { className: "history-meta" },
+            `${pendingDetections.length} item${pendingDetections.length === 1 ? "" : "s"} waiting for confirmation`
+          ),
+          pendingError ? h("p", { className: "audio-error" }, pendingError) : null
+        ),
+        pendingDetections.length
+          ? h(
+              "div",
+              { className: "history-list" },
+              ...pendingDetections.map((pending) =>
+                h(PendingDetectionCard, {
+                  key: pending.pendingId,
+                  pending,
+                  isActing: pendingActionId === pending.pendingId,
+                  onConfirm: () => handleConfirmPending(pending),
+                  onReject: () => handleRejectPending(pending),
+                })
+              )
+            )
+          : h("p", { className: "history-meta" }, `No pending detections for ${languageNames[selectedLanguage]}.`)
       ),
       h(
         "section",

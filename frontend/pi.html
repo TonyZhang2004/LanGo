@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LanGo Pi Panel</title>
+    <link rel="stylesheet" href="./pi.css" />
+  </head>
+  <body>
+    <main class="pi-shell">
+      <section class="hero">
+        <p class="eyebrow">Raspberry Pi Control</p>
+        <h1>Language Selection</h1>
+        <p class="lede">Choose the target language for upcoming object detections.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Current Target</p>
+            <p class="selection" id="selected-language">Loading...</p>
+          </div>
+          <button class="refresh-button" id="refresh-button" type="button">Refresh</button>
+        </div>
+        <p class="status" id="status-message">Connecting to LanGo...</p>
+        <div class="language-grid" id="language-grid"></div>
+      </section>
+
+      <section class="panel note-panel">
+        <p class="eyebrow">How It Works</p>
+        <p class="note">
+          The camera detector reads this selected language from the backend. New detections are submitted in the
+          language you choose here.
+        </p>
+        <a class="app-link" href="./index.html">Open Translation History</a>
+      </section>
+    </main>
+
+    <script src="./pi-panel.js"></script>
+  </body>
+</html>

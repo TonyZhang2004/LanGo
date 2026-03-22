@@ -1,0 +1,186 @@
+:root {
+  --bg: #10151b;
+  --panel: rgba(9, 15, 22, 0.82);
+  --panel-line: rgba(255, 255, 255, 0.12);
+  --text: #f6f7f2;
+  --muted: #afbab3;
+  --accent: #ffcf5a;
+  --accent-strong: #ffb100;
+  --active: #c5ff76;
+  --danger: #ff8d7c;
+  --shadow: 0 24px 54px rgba(0, 0, 0, 0.28);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(255, 207, 90, 0.28), transparent 24rem),
+    radial-gradient(circle at right, rgba(197, 255, 118, 0.18), transparent 22rem),
+    linear-gradient(180deg, #15202b 0%, #0c1117 100%);
+}
+
+.pi-shell {
+  width: min(1080px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 40px;
+}
+
+.hero,
+.panel {
+  border: 1px solid var(--panel-line);
+  border-radius: 28px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.hero {
+  padding: 28px;
+}
+
+.panel {
+  margin-top: 24px;
+  padding: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2.8rem, 8vw, 5.4rem);
+  line-height: 0.94;
+  letter-spacing: -0.05em;
+}
+
+.lede,
+.note,
+.status {
+  margin: 12px 0 0;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.selection {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.refresh-button,
+.language-button,
+.app-link {
+  border: 1px solid var(--panel-line);
+  border-radius: 18px;
+  color: var(--text);
+  font: inherit;
+}
+
+.refresh-button,
+.language-button {
+  cursor: pointer;
+}
+
+.refresh-button {
+  padding: 12px 18px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.language-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.language-button {
+  padding: 18px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.language-button:hover,
+.language-button:focus-visible,
+.refresh-button:hover,
+.refresh-button:focus-visible,
+.app-link:hover,
+.app-link:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.language-button.is-selected {
+  border-color: rgba(197, 255, 118, 0.5);
+  background: linear-gradient(135deg, rgba(197, 255, 118, 0.2), rgba(255, 207, 90, 0.14));
+}
+
+.language-label {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.language-meta {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.status.is-error {
+  color: var(--danger);
+}
+
+.status.is-success {
+  color: var(--active);
+}
+
+.note-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-link {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 12px 16px;
+  background: rgba(255, 177, 0, 0.12);
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .refresh-button {
+    width: 100%;
+  }
+}
