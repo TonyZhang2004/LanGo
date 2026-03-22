@@ -1,6 +1,5 @@
 import json
-from pathlib import Path
-from urllib import error, request
+from urllib import request
 
 
 SERVER_BASE = "http://127.0.0.1:8000"
@@ -42,6 +41,14 @@ def set_selected_language(language_key, server_base=SERVER_BASE):
 def list_pending(language_key=None, server_base=SERVER_BASE):
     suffix = f"?language={language_key}" if language_key else ""
     with request.urlopen(f"{server_base}/api/detections/pending{suffix}", timeout=10) as response:
+        return response.status, json.loads(response.read().decode("utf-8"))
+
+
+def get_history(language_key, server_base=SERVER_BASE):
+    with request.urlopen(
+        f"{server_base}/api/history?language={language_key}",
+        timeout=10,
+    ) as response:
         return response.status, json.loads(response.read().decode("utf-8"))
 
 

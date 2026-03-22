@@ -34,6 +34,7 @@ These are the current helper functions the Pi code should call:
 
 - [detection_client.py](/Users/tony/Desktop/LanGo/hardware/detection_client.py)
 - [pi_upload_image_example.py](/Users/tony/Desktop/LanGo/hardware/pi_upload_image_example.py)
+- [pi_screen.py](/Users/tony/Desktop/LanGo/pi_screen.py)
 
 ### 1. Read Or Change The Selected Language
 
@@ -146,7 +147,39 @@ Return payload:
 }
 ```
 
-### 4. Confirm A Pending Detection
+### 4. Read Confirmed History
+
+Function:
+
+- `get_history(language_key, server_base=SERVER_BASE)`
+
+Defined at:
+
+- [detection_client.py](/Users/tony/Desktop/LanGo/hardware/detection_client.py#L48)
+
+Use this when the Pi screen needs to show the latest confirmed translation summary for the selected language.
+
+Return payload:
+
+```json
+{
+  "entries": [
+    {
+      "id": "42",
+      "languageKey": "spanish",
+      "english": "apple",
+      "translated": "manzana",
+      "speech": "manzana",
+      "lang": "es-ES",
+      "image": "./assets/captures/apple-123.png",
+      "time": "7:55 PM",
+      "createdAt": "2026-03-21T19:55:00-04:00"
+    }
+  ]
+}
+```
+
+### 5. Confirm A Pending Detection
 
 Function:
 
@@ -187,7 +220,7 @@ Return payload:
 }
 ```
 
-### 5. Reject A Pending Detection
+### 6. Reject A Pending Detection
 
 Function:
 
@@ -213,7 +246,7 @@ Return payload:
 }
 ```
 
-### 6. Upload A Real JPG File
+### 7. Upload A Real JPG File
 
 Function:
 
@@ -250,12 +283,37 @@ The Pi-side code should follow this order:
 2. let the user change it from the Raspberry Pi screen with `set_selected_language(...)` or the built-in Pi page
 3. run YOLO detection
 4. normalize the detected English object label
-5. optionally save a crop image
+5. save a crop image under `frontend/assets/captures/`
 6. call `submit_detection(...)`
-7. show the pending word on the Pi screen
-8. if user accepts, call `confirm_pending(...)`
-9. if user rejects, call `reject_pending(...)`
-10. if needed, upload a real JPG with `upload_image(...)` after confirmation
+7. show a scrollable pending queue on the Pi screen
+8. let the user select an item from the queue
+9. if user accepts, call `confirm_pending(...)`
+10. if user rejects, call `reject_pending(...)`
+11. refresh `get_history(...)` so the Pi can show the latest saved translation
+12. if needed, upload a real JPG with `upload_image(...)` after confirmation
+
+## Native Raspberry Pi Screen
+
+LanGo now includes a native Tkinter Raspberry Pi app:
+
+- run with `.venv/bin/python pi_screen.py`
+
+Files:
+
+- [pi_screen.py](/Users/tony/Desktop/LanGo/pi_screen.py)
+- [screen-test.py](/Users/tony/Desktop/LanGo/screen-test.py)
+
+Behavior:
+
+- fullscreen native Python UI for Raspberry Pi
+- uses the same warm paper / lime accent theme direction as the webapp
+- lets the user switch between `Language` and `Mode`
+- keeps `Learn` functional and `Game` as a placeholder
+- shows a scrollable pending-detection queue for the selected language
+- lets the user tap a pending item and choose `Add to History` or `Reject`
+- shows the latest confirmed translation summary for the selected language
+
+The browser page at `pi.html` remains available, but `pi_screen.py` is now the intended native on-device UI.
 
 ## Built-In Raspberry Pi Language Panel
 
@@ -305,6 +363,7 @@ Important behavior:
 
 - selected device language is persisted in `data/device_language.json`
 - the detector reads that selected language and applies it to future submissions
+- detector crop images are written into `frontend/assets/captures/` as PNG files
 - translation happens when `submit_detection(...)` is called
 - queue items are stored in memory on the backend
 - pending detections are deduped by `english` within each language
@@ -320,9 +379,11 @@ A fully functioning Pi-side Python file should:
 - run detection or receive a detected word
 - call `submit_detection(language_key, english, image)`
 - store the returned `pendingId`
-- show a confirmation UI on the Pi screen
+- show a scrollable queue UI on the Pi screen
+- allow the user to select which pending word to act on
 - on accept, call `confirm_pending(pendingId)`
 - on reject, call `reject_pending(pendingId)`
+- read `get_history(language_key)` to show the latest confirmed translation
 - optionally call `upload_image(entry_id, image_path, server_base)` if the image file needs to be hosted by the backend
 
 ## Minimal Reference Snippet
@@ -365,7 +426,7 @@ If another assistant is generating the Raspberry Pi Python file, it should follo
 - preserve `pendingId` from submit to confirm/reject
 - if the server is on the same Pi, use `http://127.0.0.1:<port>`
 - if the server is on another laptop, use that machine’s LAN IP and make sure the server was started with `HOST=0.0.0.0`
-- keep the UI simple: detected word, translated word, confirm button, reject button
+- keep the UI simple but queue-oriented: language picker, pending list, selected item detail, confirm button, reject button
 
 ## Related Files
 
