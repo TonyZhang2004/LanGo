@@ -3,6 +3,10 @@ import os
 import re
 import time
 from pathlib import Path
+from gtts import gTTS
+from io import BytesIO
+import pygame
+from cache import fr_translated, zh_cn_translated, es_translated
 
 import cv2
 import mediapipe as mp
@@ -124,6 +128,41 @@ def save_manual_screenshot(crop):
         if cv2.imwrite(str(filepath), crop):
             print(f"Saved manual crop to {filepath}.")
 
+def translate(text, language):
+    mp3_fo = BytesIO()
+    tts = gTTS(text, lang='en')
+    tts.write_to_fp(mp3_fo)
+    mp3_fo.seek(0)
+
+    pygame.mixer.init()
+    sound = pygame.mixer.Sound(mp3_fo)
+    sound.play()
+
+    while pygame.mixer.get_busy():
+        time.sleep(0.1)
+
+    # say it translated
+    mp3_fo = BytesIO()
+    translated = text
+    if language == 'fr':
+        translated = fr_translated.get(text, text)
+    elif language == 'zh-CN':
+        translated = zh_cn_translated.get(text, text)
+    elif language == 'es':
+        translated = es_translated.get(text, text)
+    tts = gTTS(translated, lang=language)
+    tts.write_to_fp(mp3_fo)
+    mp3_fo.seek(0)
+
+    pygame.mixer.init()
+    sound = pygame.mixer.Sound(mp3_fo)
+    sound.play()
+
+    while pygame.mixer.get_busy():
+        time.sleep(0.1)
+
+    
+
 
 def main():
     clear_runtime_storage()
@@ -153,6 +192,7 @@ def main():
     pinch_threshold = 40
     recent_submissions = {}
     language_cache = {"key": None, "checked_at": 0.0}
+    language = 'fr'
 
     seen_labels = []
 
@@ -210,6 +250,7 @@ def main():
                     clean_label = label_map.get(label, label)
                     if clean_label not in seen_labels:
                         seen_labels.append(clean_label)
+                        translate(clean_label, language)
                         crop = frame[y1:y2, x1:x2]
                         submit_pending_detection(
                             clean_label,
