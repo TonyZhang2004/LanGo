@@ -32,6 +32,25 @@ class PiScreenHelperTests(unittest.TestCase):
         self.assertEqual(pi_screen.THEME["ink"], "#151719")
         self.assertEqual(pi_screen.THEME["accent"], "#d7ff5c")
 
+    def test_main_message_uses_pending_translation_when_selected(self):
+        message = pi_screen.format_main_message(
+            "learn",
+            {"english": "hi", "translated": "hola"},
+            None,
+        )
+
+        self.assertEqual(message, "hi → hola")
+
+    def test_main_message_defaults_to_start_prompt(self):
+        message = pi_screen.format_main_message("learn", None, None)
+
+        self.assertEqual(message, "point to start translating")
+
+    def test_main_message_uses_game_placeholder_for_game_mode(self):
+        message = pi_screen.format_main_message("game", None, None)
+
+        self.assertEqual(message, "game mode coming soon")
+
 
 if __name__ == "__main__":
     unittest.main()
