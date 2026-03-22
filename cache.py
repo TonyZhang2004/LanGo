@@ -1,0 +1,62 @@
+fr_translated = {
+    "person": "personne",
+    "laptop": "ordinateur portable",
+    "cellphone": "téléphone portable",
+    "cup": "tasse",
+    "bottle": "bouteille",
+    "chair": "chaise",
+    "table": "table",
+    "backpack": "sac à dos",
+    "handbag": "sac à main",
+    "cat": "chat",
+    "dog": "chien",
+    "bird": "oiseau",
+    "ball": "ballon",
+    "apple": "pomme",
+    "keyboard": "clavier",
+    "teddy bear": "ours en peluche",
+    "television": "télévision",
+    "book": "livre"
+}
+
+zh_cn_translated = {
+    "person": "人",
+    "laptop": "笔记本电脑",
+    "cellphone": "手机",
+    "cup": "杯子",
+    "bottle": "瓶子",
+    "chair": "椅子",
+    "table": "桌子",
+    "backpack": "背包",
+    "handbag": "手提包",
+    "cat": "猫",
+    "dog": "狗",
+    "bird": "鸟",
+    "ball": "球",
+    "apple": "苹果",
+    "keyboard": "键盘",
+    "teddy bear": "泰迪熊",
+    "television": "电视",
+    "book": "书"
+}
+
+es_translated = {
+    "person": "persona",
+    "laptop": "computadora portátil",
+    "cellphone": "teléfono celular",
+    "cup": "taza",
+    "bottle": "botella",
+    "chair": "silla",
+    "table": "mesa",
+    "backpack": "mochila",
+    "handbag": "bolso",
+    "cat": "gato",
+    "dog": "perro",
+    "bird": "pájaro",
+    "ball": "pelota",
+    "apple": "manzana",
+    "keyboard": "teclado",
+    "teddy bear": "oso de peluche",
+    "television": "televisión",
+    "book": "libro"
+}
