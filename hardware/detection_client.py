@@ -1,14 +1,25 @@
+import base64
 import json
+from pathlib import Path
 from urllib import request
 
 
 
 
-def submit_detection(english, image=None, language_key=None, server_base=SERVER_BASE):
+def submit_detection(english, image=None, image_bytes=None, image_filename=None, language_key=None, server_base=SERVER_BASE):
     payload = {
         "english": english,
-        "image": image,
     }
+    if image_bytes is not None:
+        payload["imageFilename"] = image_filename or "capture.png"
+        payload["imageBase64"] = base64.b64encode(image_bytes).decode("ascii")
+    elif image:
+        image_path = Path(image)
+        if image_path.exists():
+            payload["imageFilename"] = image_path.name
+            payload["imageBase64"] = base64.b64encode(image_path.read_bytes()).decode("ascii")
+        else:
+            payload["image"] = image
     if language_key:
         payload["languageKey"] = language_key
     req = request.Request(

@@ -8,12 +8,15 @@ from backend.groq_audio_translation import GroqAudioTranslator
 from backend.language_state import DeviceLanguageState
 from backend.server import (
     build_history_entry_payload,
+    build_pending_capture_path,
     build_uploaded_image_path,
     clear_pending_capture_storage,
     finalize_confirmed_entry_image,
+    resolve_detection_image,
     resolve_detection_language_key,
     resolve_managed_image_file,
     resolve_tts_provider,
+    save_pending_capture,
     save_uploaded_image,
 )
 from backend.translation_store import TranslationStore
@@ -48,6 +51,12 @@ class ServerLogicTests(unittest.TestCase):
         self.assertTrue(image_path.startswith("./assets/uploads/15-pumpkin-photo-"))
         self.assertEqual(file_path.suffix, ".jpg")
 
+    def test_pending_capture_path_is_server_relative_and_sanitized(self):
+        image_path, file_path = build_pending_capture_path("cell phone.JPG")
+
+        self.assertTrue(image_path.startswith("./assets/captures/cell-phone-"))
+        self.assertEqual(file_path.suffix, ".jpg")
+
     def test_save_uploaded_image_writes_bytes_to_disk(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_uploads = Path(temp_dir)
@@ -59,11 +68,39 @@ class ServerLogicTests(unittest.TestCase):
                 self.assertTrue(file_path.exists())
                 self.assertEqual(file_path.read_bytes(), b"jpg-bytes")
 
+    def test_save_pending_capture_writes_bytes_to_disk(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_captures = Path(temp_dir)
+            from unittest.mock import patch
+
+            with patch("backend.server.CAPTURES_DIR", temp_captures):
+                image_path, file_path = save_pending_capture("keyboard.png", b"png-bytes")
+                self.assertTrue(image_path.startswith("./assets/captures/"))
+                self.assertTrue(file_path.exists())
+                self.assertEqual(file_path.read_bytes(), b"png-bytes")
+
     def test_resolve_uploaded_image_file_returns_frontend_upload_path(self):
         image_file = resolve_managed_image_file("./assets/uploads/pumpkin.jpg")
 
         self.assertEqual(image_file, Path(__file__).resolve().parent.parent / "frontend" / "assets" / "uploads" / "pumpkin.jpg")
         self.assertIsNone(resolve_managed_image_file("./assets/ball.svg"))
+
+    def test_resolve_detection_image_saves_base64_payload_into_captures(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_captures = Path(temp_dir)
+            from unittest.mock import patch
+
+            with patch("backend.server.CAPTURES_DIR", temp_captures):
+                image_path, file_path = resolve_detection_image(
+                    {
+                        "imageFilename": "camera-book.png",
+                        "imageBase64": "cG5nLWJ5dGVz",
+                    }
+                )
+
+                self.assertTrue(image_path.startswith("./assets/captures/"))
+                self.assertTrue(file_path.exists())
+                self.assertEqual(file_path.read_bytes(), b"png-bytes")
 
     def test_clear_pending_capture_storage_removes_temp_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -99,7 +136,11 @@ class ServerLogicTests(unittest.TestCase):
 
             from unittest.mock import patch
 
-            with patch("backend.server.FRONTEND_DIR", temp_frontend), patch("backend.server.UPLOADS_DIR", uploads_dir):
+            with (
+                patch("backend.server.FRONTEND_DIR", temp_frontend),
+                patch("backend.server.UPLOADS_DIR", uploads_dir),
+                patch("backend.translation_store.FRONTEND_DIR", temp_frontend),
+            ):
                 updated_entry = finalize_confirmed_entry_image(entry, "./assets/captures/apple.png", store=store)
 
             self.assertTrue(updated_entry["image"].startswith("./assets/uploads/"))

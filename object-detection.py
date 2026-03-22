@@ -3,7 +3,6 @@ import os
 import re
 import time
 from pathlib import Path
-from uuid import uuid4
 
 import cv2
 import mediapipe as mp
@@ -17,7 +16,6 @@ from hardware.detection_client import (
 
 
 ROOT_DIR = Path(__file__).resolve().parent
-CAPTURES_DIR = ROOT_DIR / "frontend" / "assets" / "captures"
 LEGACY_IMAGES_DIR = ROOT_DIR / "images"
 SERVER_BASE = os.environ.get("LANGO_SERVER_BASE", DEFAULT_SERVER_BASE)
 FRAME_INTERVAL_SECONDS = float(os.environ.get("LANGO_FRAME_INTERVAL_SECONDS", "0.2"))
@@ -39,24 +37,17 @@ def clear_temp_directory(directory):
 
 
 def clear_runtime_storage():
-    clear_temp_directory(CAPTURES_DIR)
     if LEGACY_IMAGES_DIR.exists():
         clear_temp_directory(LEGACY_IMAGES_DIR)
 
 
-def capture_relative_path(file_path):
-    return f"./assets/captures/{Path(file_path).name}"
-
-
-def save_capture_image(label, crop):
+def encode_capture_image(crop):
     if crop.size == 0:
         return None
-    CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"{slugify_label(label)}-{uuid4().hex[:8]}.png"
-    file_path = CAPTURES_DIR / filename
-    if not cv2.imwrite(str(file_path), crop):
+    success, encoded = cv2.imencode(".png", crop)
+    if not success:
         return None
-    return capture_relative_path(file_path)
+    return encoded.tobytes()
 
 
 def current_language_key(language_cache, server_base=SERVER_BASE):
@@ -100,24 +91,18 @@ def submit_pending_detection(label, crop, recent_submissions, language_cache, se
     if not should_submit_detection(language_key, label, recent_submissions):
         return
 
-    image_path = save_capture_image(label, crop)
+    image_bytes = encode_capture_image(crop)
+    image_filename = f"{slugify_label(label)}.png"
     try:
         status, payload = submit_detection(
             label,
-            image=image_path,
+            image_bytes=image_bytes,
+            image_filename=image_filename,
             server_base=server_base,
         )
     except Exception as exc:
-        if image_path:
-            managed_file = CAPTURES_DIR / Path(image_path).name
-            managed_file.unlink(missing_ok=True)
         print(f"Could not submit pending detection for {label}: {exc}")
         return
-
-    pending_entry = payload.get("pending", {})
-    if image_path and pending_entry.get("image") != image_path:
-        managed_file = CAPTURES_DIR / Path(image_path).name
-        managed_file.unlink(missing_ok=True)
 
     if payload.get("created"):
         print(f"Queued {label} for {language_key}.")
@@ -133,9 +118,11 @@ def submit_pending_detection(label, crop, recent_submissions, language_cache, se
 
 
 def save_manual_screenshot(crop):
-    image_path = save_capture_image("manual-crop", crop)
-    if image_path:
-        print(f"Saved manual crop to {image_path}.")
+    if LEGACY_IMAGES_DIR.exists() or crop.size > 0:
+        LEGACY_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+        filepath = LEGACY_IMAGES_DIR / "screenshot.png"
+        if cv2.imwrite(str(filepath), crop):
+            print(f"Saved manual crop to {filepath}.")
 
 
 def main():
