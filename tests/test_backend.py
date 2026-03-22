@@ -6,7 +6,19 @@ from pathlib import Path
 
 from backend.groq_audio_translation import GroqAudioTranslator
 from backend.language_state import DeviceLanguageState
-from backend.server import build_uploaded_image_path, resolve_managed_image_file, resolve_tts_provider, save_uploaded_image
+from backend.server import (
+    build_history_entry_payload,
+    build_uploaded_image_path,
+    resolve_detection_language_key,
+    resolve_managed_image_file,
+    resolve_tts_provider,
+    save_uploaded_image,
+)
+
+
+class FakeTranslator:
+    def translate_text(self, text, target_language, source_language="English"):
+        return f"{target_language}:{text}", False
 
 
 class TranslatorSupportTests(unittest.TestCase):
@@ -49,6 +61,47 @@ class ServerLogicTests(unittest.TestCase):
 
         self.assertEqual(image_file, Path(__file__).resolve().parent.parent / "frontend" / "assets" / "uploads" / "pumpkin.jpg")
         self.assertIsNone(resolve_managed_image_file("./assets/ball.svg"))
+
+    def test_build_history_entry_payload_uses_selected_device_language(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = DeviceLanguageState(Path(temp_dir) / "device_language.json")
+            state.set_selected_language("japanese")
+
+            payload = build_history_entry_payload(
+                {"english": "book"},
+                translator_instance=FakeTranslator(),
+                language_state=state,
+            )
+
+        self.assertEqual(payload["languageKey"], "japanese")
+        self.assertEqual(payload["english"], "book")
+        self.assertEqual(payload["translated"], "Japanese:book")
+        self.assertEqual(payload["speech"], "Japanese:book")
+        self.assertTrue(payload["time"])
+
+    def test_build_history_entry_payload_treats_placeholder_translation_as_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = DeviceLanguageState(Path(temp_dir) / "device_language.json")
+            state.set_selected_language("french")
+
+            payload = build_history_entry_payload(
+                {"english": "shoe", "translated": "n", "speech": "n"},
+                translator_instance=FakeTranslator(),
+                language_state=state,
+            )
+
+        self.assertEqual(payload["languageKey"], "french")
+        self.assertEqual(payload["translated"], "French:shoe")
+        self.assertEqual(payload["speech"], "French:shoe")
+
+    def test_resolve_detection_language_key_defaults_to_device_selection(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = DeviceLanguageState(Path(temp_dir) / "device_language.json")
+            state.set_selected_language("arabic")
+
+            language_key = resolve_detection_language_key({"english": "apple"}, language_state=state)
+
+        self.assertEqual(language_key, "arabic")
 
 
 class DeviceLanguageStateTests(unittest.TestCase):

@@ -5,12 +5,13 @@ from urllib import request
 SERVER_BASE = "http://127.0.0.1:8000"
 
 
-def submit_detection(language_key, english, image=None, server_base=SERVER_BASE):
+def submit_detection(english, image=None, language_key=None, server_base=SERVER_BASE):
     payload = {
-        "languageKey": language_key,
         "english": english,
         "image": image,
     }
+    if language_key:
+        payload["languageKey"] = language_key
     req = request.Request(
         f"{server_base}/api/detections",
         data=json.dumps(payload).encode("utf-8"),

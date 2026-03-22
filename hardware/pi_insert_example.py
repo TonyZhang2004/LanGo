@@ -41,12 +41,7 @@ def upload_image(entry_id, image_path):
     
 def main():
     entry = {
-        "languageKey": "french",
         "english": "hand",
-        "translated": "main",
-        "speech": "main",
-        "image": None,
-        "time": current_time_label(),
     }
     image_path = "./images/hand.jpg"
 

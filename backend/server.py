@@ -2,6 +2,7 @@ import json
 import mimetypes
 import os
 import re
+from datetime import datetime
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -10,7 +11,7 @@ from uuid import uuid4
 
 from backend.detection_workflow import DetectionWorkflow
 from backend.groq_audio_translation import GroqAudioTranslator
-from backend.language_state import DeviceLanguageState, SUPPORTED_LANGUAGES
+from backend.language_state import DeviceLanguageState, SUPPORTED_LANGUAGES, normalize_language_key
 from backend.translation_store import TranslationStore
 
 
@@ -27,11 +28,65 @@ device_language_state = DeviceLanguageState()
 
 
 LANGUAGE_CODES = {key: value["label"] for key, value in SUPPORTED_LANGUAGES.items()}
+MISSING_TEXT_VALUES = {"", "n", "na", "n/a", "none", "null"}
 
 
 def resolve_target_language(language_key):
     normalized = (language_key or "spanish").strip().lower()
     return LANGUAGE_CODES.get(normalized, normalized or "Spanish")
+
+
+def current_time_label():
+    return datetime.now().astimezone().strftime("%I:%M %p").lstrip("0")
+
+
+def normalize_optional_text(value):
+    normalized = str(value or "").strip()
+    if normalized.lower() in MISSING_TEXT_VALUES:
+        return ""
+    return normalized
+
+
+def resolve_detection_language_key(payload, language_state=device_language_state):
+    requested_language_key = normalize_optional_text(payload.get("languageKey"))
+    if requested_language_key:
+        return normalize_language_key(requested_language_key)
+    selected_language = language_state.get_selected_language()
+    return normalize_language_key(selected_language["selectedLanguage"]["key"])
+
+
+def translate_detected_english(english, language_key, translator_instance=translator):
+    target_language = resolve_target_language(language_key)
+    translated, _ = translator_instance.translate_text(
+        english,
+        target_language=target_language,
+        source_language="English",
+    )
+    return translated
+
+
+def build_history_entry_payload(payload, translator_instance=translator, language_state=device_language_state):
+    english = normalize_optional_text(payload.get("english"))
+    if not english:
+        raise ValueError("Missing english.")
+
+    language_key = resolve_detection_language_key(payload, language_state=language_state)
+    translated = normalize_optional_text(payload.get("translated"))
+    speech = normalize_optional_text(payload.get("speech"))
+
+    if not translated:
+        translated = translate_detected_english(english, language_key, translator_instance=translator_instance)
+    if not speech:
+        speech = translated
+
+    return {
+        "languageKey": language_key,
+        "english": english,
+        "translated": translated,
+        "speech": speech,
+        "image": payload.get("image"),
+        "time": normalize_optional_text(payload.get("time")) or current_time_label(),
+    }
 
 
 def resolve_tts_provider(language_key):
@@ -157,17 +212,20 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             self._write_json({"error": "Request body must be valid JSON."}, status=HTTPStatus.BAD_REQUEST)
             return
 
-        required_fields = ["languageKey", "english", "translated", "speech", "time"]
-        missing = [field for field in required_fields if not payload.get(field)]
-        if missing:
+        try:
+            entry_payload = build_history_entry_payload(payload)
+        except ValueError as exc:
+            self._write_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+        except Exception as exc:
             self._write_json(
-                {"error": f"Missing required fields: {', '.join(missing)}"},
-                status=HTTPStatus.BAD_REQUEST,
+                {"error": "Failed to translate history entry.", "details": str(exc)},
+                status=HTTPStatus.BAD_GATEWAY,
             )
             return
 
-        language_key = payload["languageKey"].strip().lower()
-        english = payload["english"].strip()
+        language_key = entry_payload["languageKey"]
+        english = entry_payload["english"]
         existing_entry = translation_store.find_entry_by_english(language_key, english)
         if existing_entry:
             self._write_json(
@@ -179,10 +237,10 @@ class LanGoHandler(SimpleHTTPRequestHandler):
         entry = translation_store.create_entry(
             language_key=language_key,
             english=english,
-            translated=payload["translated"].strip(),
-            speech=payload["speech"].strip(),
-            image=payload.get("image"),
-            time_label=payload["time"].strip(),
+            translated=entry_payload["translated"],
+            speech=entry_payload["speech"],
+            image=entry_payload.get("image"),
+            time_label=entry_payload["time"],
         )
         self._write_json({"entry": entry, "created": True}, status=HTTPStatus.CREATED)
 
@@ -191,26 +249,29 @@ class LanGoHandler(SimpleHTTPRequestHandler):
         if payload is None:
             return
 
-        required_fields = ["languageKey", "english"]
-        missing = [field for field in required_fields if not payload.get(field)]
-        if missing:
-            self._write_json(
-                {"error": f"Missing required fields: {', '.join(missing)}"},
-                status=HTTPStatus.BAD_REQUEST,
-            )
+        english = normalize_optional_text(payload.get("english"))
+        if not english:
+            self._write_json({"error": "Missing english."}, status=HTTPStatus.BAD_REQUEST)
             return
 
         try:
+            language_key = resolve_detection_language_key(payload)
             pending, created = detection_workflow.submit_detection(
-                language_key=payload["languageKey"].strip().lower(),
-                english=payload["english"].strip(),
+                language_key=language_key,
+                english=english,
                 image=payload.get("image"),
             )
+        except ValueError as exc:
+            self._write_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
         except Exception as exc:
             self._write_json({"error": "Failed to create pending detection.", "details": str(exc)}, status=HTTPStatus.BAD_GATEWAY)
             return
 
-        self._write_json({"pending": pending, "created": created}, status=HTTPStatus.CREATED if created else HTTPStatus.OK)
+        self._write_json(
+            {"entry": pending, "pending": pending, "created": created},
+            status=HTTPStatus.CREATED if created else HTTPStatus.OK,
+        )
 
     def _handle_detection_confirm(self):
         payload = self._read_json_body()
