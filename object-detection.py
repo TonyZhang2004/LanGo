@@ -154,6 +154,8 @@ def main():
     recent_submissions = {}
     language_cache = {"key": None, "checked_at": 0.0}
 
+    seen_labels = []
+
     while True:
         frame_started = time.perf_counter()
         ret, frame = cap.read()
@@ -206,14 +208,16 @@ def main():
                     cls = int(best_box.cls[0])
                     label = model.names[cls]
                     clean_label = label_map.get(label, label)
-                    crop = frame[y1:y2, x1:x2]
-                    submit_pending_detection(
-                        clean_label,
-                        crop,
-                        recent_submissions,
-                        language_cache,
-                        server_base=SERVER_BASE,
-                    )
+                    if clean_label not in seen_labels:
+                        seen_labels.append(clean_label)
+                        crop = frame[y1:y2, x1:x2]
+                        submit_pending_detection(
+                            clean_label,
+                            crop,
+                            recent_submissions,
+                            language_cache,
+                            server_base=SERVER_BASE,
+                        )
 
             elif touched == 1:
                 touch_end = [tip_x, tip_y]
