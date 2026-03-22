@@ -12,7 +12,7 @@ root.configure(bg="#f5f7fa")
 def exit_fullscreen(event=None):
     root.attributes('-fullscreen', False)
 
-root.bind("<Escape>", exit_fullscreen)
+root.bind("<Tab>", exit_fullscreen)
 
 # ---------- STYLE ----------
 style = ttk.Style()
