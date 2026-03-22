@@ -1,5 +1,6 @@
 import math
 import os
+import random
 import re
 import time
 from pathlib import Path
@@ -15,6 +16,7 @@ from ultralytics import YOLO
 from hardware.detection_client import (
     SERVER_BASE as DEFAULT_SERVER_BASE,
     get_selected_language,
+    get_selected_mode,
     submit_detection,
 )
 
@@ -24,6 +26,7 @@ LEGACY_IMAGES_DIR = ROOT_DIR / "images"
 SERVER_BASE = os.environ.get("LANGO_SERVER_BASE", DEFAULT_SERVER_BASE)
 FRAME_INTERVAL_SECONDS = float(os.environ.get("LANGO_FRAME_INTERVAL_SECONDS", "0.2"))
 LANGUAGE_CACHE_SECONDS = float(os.environ.get("LANGO_LANGUAGE_CACHE_SECONDS", "1.0"))
+MODE_CACHE_SECONDS = float(os.environ.get("LANGO_MODE_CACHE_SECONDS", "0.25"))
 DETECTION_COOLDOWN_SECONDS = float(os.environ.get("LANGO_DETECTION_COOLDOWN_SECONDS", "3.0"))
 
 
@@ -69,6 +72,23 @@ def current_language_key(language_cache, server_base=SERVER_BASE):
         language_cache["key"] = cached_key or "spanish"
         language_cache["checked_at"] = now
     return language_cache["key"]
+
+
+def current_mode_key(mode_cache, server_base=SERVER_BASE, fallback="learn"):
+    now = time.monotonic()
+    cached_key = mode_cache.get("key")
+    cached_at = mode_cache.get("checked_at", 0.0)
+    if cached_key and now - cached_at < MODE_CACHE_SECONDS:
+        return cached_key
+
+    try:
+        _, payload = get_selected_mode(server_base=server_base)
+        mode_cache["key"] = str(payload.get("selectedMode", fallback)).strip().lower() or fallback
+        mode_cache["checked_at"] = now
+    except Exception:
+        mode_cache["key"] = cached_key or fallback
+        mode_cache["checked_at"] = now
+    return mode_cache["key"]
 
 
 def should_submit_detection(language_key, label, recent_submissions, now=None):
@@ -164,8 +184,9 @@ def translate(text, language):
         time.sleep(0.1)
 
 
-def learn():
+def learn(mode_cache=None, server_base=SERVER_BASE):
     clear_runtime_storage()
+    mode_cache = mode_cache or {"key": "learn", "checked_at": 0.0}
 
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
@@ -195,106 +216,109 @@ def learn():
     #language = 'fr'
 
     seen_labels = []
+    try:
+        while True:
+            if current_mode_key(mode_cache, server_base=server_base, fallback="learn") != "learn":
+                return "game"
 
-    while True:
-        frame_started = time.perf_counter()
-        ret, frame = cap.read()
-        if not ret:
-            break
+            frame_started = time.perf_counter()
+            ret, frame = cap.read()
+            if not ret:
+                return None
 
-        height, width, _ = frame.shape
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        hand_results = hands.process(rgb)
+            height, width, _ = frame.shape
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            hand_results = hands.process(rgb)
 
-        if hand_results.multi_hand_landmarks:
-            yolo_results = model(frame, verbose=False)[0]
-            hand_landmarks = hand_results.multi_hand_landmarks[0]
+            if hand_results.multi_hand_landmarks:
+                yolo_results = model(frame, verbose=False)[0]
+                hand_landmarks = hand_results.multi_hand_landmarks[0]
 
-            tip = hand_landmarks.landmark[8]
-            tip_x = int(tip.x * width)
-            tip_y = int(tip.y * height)
+                tip = hand_landmarks.landmark[8]
+                tip_x = int(tip.x * width)
+                tip_y = int(tip.y * height)
 
-            thumb = hand_landmarks.landmark[4]
-            thumb_x = int(thumb.x * width)
-            thumb_y = int(thumb.y * height)
+                thumb = hand_landmarks.landmark[4]
+                thumb_x = int(thumb.x * width)
+                thumb_y = int(thumb.y * height)
 
-            pinch_distance = math.sqrt((thumb_x - tip_x) ** 2 + (thumb_y - tip_y) ** 2)
+                pinch_distance = math.sqrt((thumb_x - tip_x) ** 2 + (thumb_y - tip_y) ** 2)
 
-            if touched == 0:
-                if pinch_distance < pinch_threshold:
-                    touched = 1
-                    touch_start = [tip_x, tip_y]
-                    continue
-
-                detected_boxes = []
-                for box in yolo_results.boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                    cls = int(box.cls[0])
-                    label = model.names[cls]
-                    if label in ignore_classes:
+                if touched == 0:
+                    if pinch_distance < pinch_threshold:
+                        touched = 1
+                        touch_start = [tip_x, tip_y]
                         continue
-                    if x1 <= tip_x <= x2 and y1 <= tip_y <= y2:
-                        detected_boxes.append(box)
 
-                if detected_boxes:
-                    best_box = min(
-                        detected_boxes,
-                        key=lambda box: (
-                            (box.xyxy[0].cpu().numpy()[2] - box.xyxy[0].cpu().numpy()[0])
-                            * (box.xyxy[0].cpu().numpy()[3] - box.xyxy[0].cpu().numpy()[1])
-                        ),
-                    )
-                    x1, y1, x2, y2 = map(int, best_box.xyxy[0].cpu().numpy())
-                    cls = int(best_box.cls[0])
-                    label = model.names[cls]
-                    clean_label = label_map.get(label, label)
-                    if clean_label not in seen_labels:
-                        seen_labels.append(clean_label)
-                        #translate(clean_label, language)
-                        crop = frame[y1:y2, x1:x2]
-                        submit_pending_detection(
-                            clean_label,
-                            crop,
-                            recent_submissions,
-                            language_cache,
-                            server_base=SERVER_BASE,
+                    detected_boxes = []
+                    for box in yolo_results.boxes:
+                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                        cls = int(box.cls[0])
+                        label = model.names[cls]
+                        if label in ignore_classes:
+                            continue
+                        if x1 <= tip_x <= x2 and y1 <= tip_y <= y2:
+                            detected_boxes.append(box)
+
+                    if detected_boxes:
+                        best_box = min(
+                            detected_boxes,
+                            key=lambda box: (
+                                (box.xyxy[0].cpu().numpy()[2] - box.xyxy[0].cpu().numpy()[0])
+                                * (box.xyxy[0].cpu().numpy()[3] - box.xyxy[0].cpu().numpy()[1])
+                            ),
                         )
+                        x1, y1, x2, y2 = map(int, best_box.xyxy[0].cpu().numpy())
+                        cls = int(best_box.cls[0])
+                        label = model.names[cls]
+                        clean_label = label_map.get(label, label)
+                        if clean_label not in seen_labels:
+                            seen_labels.append(clean_label)
+                            if len(seen_labels) > 5:
+                                seen_labels = []
+                            crop = frame[y1:y2, x1:x2]
+                            submit_pending_detection(
+                                clean_label,
+                                crop,
+                                recent_submissions,
+                                language_cache,
+                                server_base=server_base,
+                            )
 
-            elif touched == 1:
-                touch_end = [tip_x, tip_y]
-                cv2.circle(frame, (tip_x, tip_y), 10, (0, 0, 255), -1)
-                cv2.rectangle(
-                    frame,
-                    (int(touch_start[0]), int(touch_start[1])),
-                    (int(touch_end[0]), int(touch_end[1])),
-                    (0, 255, 0),
-                    2,
-                )
+                elif touched == 1:
+                    touch_end = [tip_x, tip_y]
+                    cv2.circle(frame, (tip_x, tip_y), 10, (0, 0, 255), -1)
+                    cv2.rectangle(
+                        frame,
+                        (int(touch_start[0]), int(touch_start[1])),
+                        (int(touch_end[0]), int(touch_end[1])),
+                        (0, 255, 0),
+                        2,
+                    )
 
-                if pinch_distance > pinch_threshold:
-                    touched = 2
+                    if pinch_distance > pinch_threshold:
+                        touched = 2
 
-            elif touched == 2:
-                if abs(touch_start[0] - touch_end[0]) < 20 or abs(touch_start[1] - touch_end[1]) < 20:
+                elif touched == 2:
+                    if abs(touch_start[0] - touch_end[0]) < 20 or abs(touch_start[1] - touch_end[1]) < 20:
+                        touched = 0
+                        continue
+
+                    crop = frame[touch_start[1]:touch_end[1], touch_start[0]:touch_end[0]]
+                    if crop.size > 0:
+                        save_manual_screenshot(crop)
+
                     touched = 0
-                    continue
 
-                crop = frame[touch_start[1]:touch_end[1], touch_start[0]:touch_end[0]]
-                if crop.size > 0:
-                    save_manual_screenshot(crop)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                return None
 
-                touched = 0
-
-        # cv2.imshow("LanGo", frame)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-
-        while time.perf_counter() - frame_started < FRAME_INTERVAL_SECONDS:
-            time.sleep(0.01)
-
-    cap.release()
-    cv2.destroyAllWindows()
+            while time.perf_counter() - frame_started < FRAME_INTERVAL_SECONDS:
+                time.sleep(0.01)
+    finally:
+        cap.release()
+        hands.close()
+        cv2.destroyAllWindows()
 
 # randomly selects object detected in frame and does TTS in the desired language
 # user points to the object they think it is
@@ -315,7 +339,8 @@ def speak(text, language):
         time.sleep(0.1)
 
 
-def game():
+def game(mode_cache=None, server_base=SERVER_BASE):
+    mode_cache = mode_cache or {"key": "game", "checked_at": 0.0}
     # -----------------------
     # MediaPipe setup
     # -----------------------
@@ -359,39 +384,38 @@ def game():
     timeout = 10
     timeout_start = 0.0
     recent_objs = []
-    while True:
-        start_time = time.perf_counter()
+    try:
+        while True:
+            if current_mode_key(mode_cache, server_base=server_base, fallback="game") != "game":
+                return "learn"
 
-        ret, frame = cap.read()
-        if not ret:
-            break
+            start_time = time.perf_counter()
 
-        h, w, _ = frame.shape
+            ret, frame = cap.read()
+            if not ret:
+                return None
 
-        # Convert to RGB for MediaPipe
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        hand_results = hands.process(rgb)
+            h, w, _ = frame.shape
 
-        
-        if state == 0:
-            yolo_results = model(frame, verbose=False)[0] #YOLO results
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            hand_results = hands.process(rgb)
 
-            detected_objs = []
+            if state == 0:
+                yolo_results = model(frame, verbose=False)[0]
 
-            for box in yolo_results.boxes:
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                cls = int(box.cls[0])
-                label = model.names[cls]
-                if label not in detected_objs and label not in ignore_classes:
+                detected_objs = []
 
-                    detected_objs.append(label)
-            
-            # CHANGE THIS CODE TO GET TRANSLATED WORD FROM LABEL!
-            if len(detected_objs) > 0:
-                random_obj = random.choice(detected_objs)
-                if random_obj in recent_objs:
-                    continue
-                else:
+                for box in yolo_results.boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    cls = int(box.cls[0])
+                    label = model.names[cls]
+                    if label not in detected_objs and label not in ignore_classes:
+                        detected_objs.append(label)
+
+                if len(detected_objs) > 0:
+                    random_obj = random.choice(detected_objs)
+                    if random_obj in recent_objs:
+                        continue
                     recent_objs.append(random_obj)
                     if len(recent_objs) > 5:
                         recent_objs.pop(0)
@@ -401,50 +425,68 @@ def game():
                     timeout_start = time.perf_counter()
                     state = 1
 
-        elif state == 1:
-            if hand_results.multi_hand_landmarks:
-                hand_landmarks = hand_results.multi_hand_landmarks[0]
+            elif state == 1:
+                if hand_results.multi_hand_landmarks:
+                    hand_landmarks = hand_results.multi_hand_landmarks[0]
 
-                tip = hand_landmarks.landmark[8]
-                tip_x = int(tip.x * w)
-                tip_y = int(tip.y * h)
+                    tip = hand_landmarks.landmark[8]
+                    tip_x = int(tip.x * w)
+                    tip_y = int(tip.y * h)
 
-                yolo_results = model(frame, verbose=False)[0] #YOLO results
+                    yolo_results = model(frame, verbose=False)[0]
 
-                for box in yolo_results.boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                    cls = int(box.cls[0])
-                    label = model.names[cls]
-                    if (x1 <= tip_x <= x2 and y1 <= tip_y <= y2) and label == random_obj:
-                        speak("Correct!", 'en')
+                    for box in yolo_results.boxes:
+                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                        cls = int(box.cls[0])
+                        label = model.names[cls]
+                        if (x1 <= tip_x <= x2 and y1 <= tip_y <= y2) and label == random_obj:
+                            speak("Correct!", 'en')
+                            state = 2
+                            break
+
+                if state != 2:
+                    current_time = time.perf_counter()
+                    if (current_time - timeout_start) > timeout:
+                        speak("Next item", 'en')
+                        if random_obj in recent_objs:
+                            recent_objs.remove(random_obj)
                         state = 2
-                        break
 
-            if state != 2:
+            elif state == 2:
+                random_obj = ""
+                state = 0
+
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                return None
+
+            current_time = time.perf_counter()
+            while (current_time - start_time) < 0.2:
+                time.sleep(0.01)
                 current_time = time.perf_counter()
-                if (current_time - timeout_start) > timeout:
-                    speak("Next item", 'en')
-                    if random_obj in recent_objs:
-                        recent_objs.remove(random_obj)
-                    state = 2
-
-        elif state == 2:
-            random_obj = ""
-            state = 0
+    finally:
+        cap.release()
+        hands.close()
+        cv2.destroyAllWindows()
 
 
-        #cv2.imshow("LanGo", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+def run_mode_loop(server_base=SERVER_BASE):
+    mode_cache = {"key": "learn", "checked_at": 0.0}
+    next_mode = current_mode_key(mode_cache, server_base=server_base, fallback="learn")
+    if next_mode not in {"learn", "game"}:
+        next_mode = "learn"
+
+    while True:
+        if next_mode == "game":
+            next_mode = game(mode_cache=mode_cache, server_base=server_base)
+        else:
+            next_mode = learn(mode_cache=mode_cache, server_base=server_base)
+
+        if next_mode not in {"learn", "game"}:
             break
 
-        current_time = time.perf_counter()
-        while (current_time - start_time) < 0.2:
-            time.sleep(0.01)
-            current_time = time.perf_counter()
-        
-    cap.release()
-    cv2.destroyAllWindows()
 
+if __name__ == "__main__":
+    run_mode_loop()
 
 
 

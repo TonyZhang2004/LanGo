@@ -49,6 +49,23 @@ def set_selected_language(language_key, server_base=SERVER_BASE):
         return response.status, json.loads(response.read().decode("utf-8"))
 
 
+def get_selected_mode(server_base=SERVER_BASE):
+    with request.urlopen(f"{server_base}/api/device/mode", timeout=10) as response:
+        return response.status, json.loads(response.read().decode("utf-8"))
+
+
+def set_selected_mode(mode_key, server_base=SERVER_BASE):
+    payload = {"modeKey": mode_key}
+    req = request.Request(
+        f"{server_base}/api/device/mode",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with request.urlopen(req, timeout=10) as response:
+        return response.status, json.loads(response.read().decode("utf-8"))
+
+
 def list_pending(language_key=None, server_base=SERVER_BASE):
     suffix = f"?language={language_key}" if language_key else ""
     with request.urlopen(f"{server_base}/api/detections/pending{suffix}", timeout=10) as response:

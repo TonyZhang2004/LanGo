@@ -233,6 +233,24 @@ class TranslationStoreDatabaseTests(unittest.TestCase):
 
         self.assertFalse(deleted)
 
+    def test_device_mode_defaults_to_learn(self):
+        payload = self.store.get_device_mode()
+
+        self.assertEqual(payload["selectedMode"], "learn")
+        self.assertEqual(payload["modes"], ["learn", "game"])
+
+    def test_set_device_mode_persists_mode(self):
+        updated = self.store.set_device_mode("game")
+        restored_store = TranslationStore(Path(self.temp_dir.name) / "test.db")
+        restored = restored_store.get_device_mode()
+
+        self.assertEqual(updated["selectedMode"], "game")
+        self.assertEqual(restored["selectedMode"], "game")
+
+    def test_set_device_mode_rejects_invalid_value(self):
+        with self.assertRaises(ValueError):
+            self.store.set_device_mode("arcade")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,6 @@
 import os
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from urllib import error
@@ -9,9 +11,11 @@ from hardware.detection_client import (
     confirm_pending,
     get_history,
     get_selected_language,
+    get_selected_mode,
     list_pending,
     reject_pending,
     set_selected_language,
+    set_selected_mode,
 )
 
 try:
@@ -24,8 +28,14 @@ except ModuleNotFoundError:
 
 ROOT_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
+OBJECT_DETECTION_SCRIPT = ROOT_DIR / "object-detection.py"
 DEFAULT_POLL_MS = int(os.environ.get("LANGO_PI_POLL_MS", "2000"))
 DEFAULT_WINDOW_MODE = os.environ.get("LANGO_PI_WINDOW_MODE", "fullscreen").strip().lower() or "fullscreen"
+DETECTOR_AUTOSTART_ENABLED = os.environ.get("LANGO_DISABLE_DETECTOR_AUTOSTART", "").strip().lower() not in {
+    "1",
+    "true",
+    "yes",
+}
 
 THEME = {
     "paper": "#f7f3eb",
@@ -493,6 +503,7 @@ class LanGoPiApp:
         self.status_tone = "muted"
         self.image_cache = {}
         self.poll_job = None
+        self.detector_process = None
 
         self.shell = None
         self.status_label = None
@@ -501,6 +512,8 @@ class LanGoPiApp:
         self._configure_root()
         self._configure_style()
         self._build_shell()
+        self._initialize_runtime_mode()
+        self._ensure_detector_running()
         self._refresh_data()
 
     def _data_signature(self):
@@ -530,6 +543,7 @@ class LanGoPiApp:
         )
         return (
             self.selected_language.get("key"),
+            self.current_mode,
             self.selected_pending_id,
             language_signature,
             pending_signature,
@@ -547,6 +561,7 @@ class LanGoPiApp:
             self.root.resizable(False, False)
         else:
             self.root.attributes("-fullscreen", True)
+        self.root.protocol("WM_DELETE_WINDOW", self._handle_close)
 
     def _configure_style(self):
         style = ttk.Style()
@@ -569,6 +584,11 @@ class LanGoPiApp:
     def run(self):
         self.root.mainloop()
 
+    def _handle_close(self):
+        self._cancel_poll()
+        self._stop_detector_process()
+        self.root.destroy()
+
     def _exit_fullscreen(self, _event=None):
         self.root.attributes("-fullscreen", False)
 
@@ -580,6 +600,44 @@ class LanGoPiApp:
     def _schedule_refresh(self):
         self._cancel_poll()
         self.poll_job = self.root.after(self.poll_ms, self._refresh_data)
+
+    def _initialize_runtime_mode(self):
+        self.current_mode = "learn"
+        try:
+            _, payload = set_selected_mode("learn", server_base=self.server_base)
+            self.current_mode = payload.get("selectedMode", "learn")
+        except Exception:
+            self.current_mode = "learn"
+
+    def _ensure_detector_running(self):
+        if not DETECTOR_AUTOSTART_ENABLED:
+            return
+        if self.detector_process and self.detector_process.poll() is None:
+            return
+
+        env = os.environ.copy()
+        env.setdefault("LANGO_SERVER_BASE", self.server_base)
+        try:
+            self.detector_process = subprocess.Popen(
+                [sys.executable, str(OBJECT_DETECTION_SCRIPT)],
+                cwd=str(ROOT_DIR),
+                env=env,
+            )
+        except Exception as exc:
+            self.detector_process = None
+            self._set_status(f"Could not start detector: {exc}", "error")
+
+    def _stop_detector_process(self):
+        if not self.detector_process:
+            return
+        if self.detector_process.poll() is None:
+            self.detector_process.terminate()
+            try:
+                self.detector_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.detector_process.kill()
+                self.detector_process.wait(timeout=5)
+        self.detector_process = None
 
     def _build_shell(self):
         for child in self.root.winfo_children():
@@ -1001,9 +1059,13 @@ class LanGoPiApp:
         self._render_screen()
 
     def _switch_mode(self, mode_key):
-        self.current_mode = mode_key
-        self._set_status(f"{mode_key.title()} mode selected.", "success")
-        self._render_screen()
+        try:
+            _, payload = set_selected_mode(mode_key, server_base=self.server_base)
+            self.current_mode = payload.get("selectedMode", self.current_mode)
+            self._set_status(f"{self.current_mode.title()} mode selected.", "success")
+            self._render_screen()
+        except Exception as exc:
+            self._set_status(f"Could not switch mode: {exc}", "error")
 
     def _shift_selected_pending(self, direction):
         if len(self.pending_items) <= 1:
@@ -1031,13 +1093,18 @@ class LanGoPiApp:
 
     def _refresh_data(self, force_render=False):
         previous_signature = self._data_signature()
+        self._ensure_detector_running()
         try:
             status_code, language_payload = get_selected_language(server_base=self.server_base)
             if status_code >= 400:
                 raise error.HTTPError("", status_code, "language request failed", None, None)
+            mode_status_code, mode_payload = get_selected_mode(server_base=self.server_base)
+            if mode_status_code >= 400:
+                raise error.HTTPError("", mode_status_code, "mode request failed", None, None)
 
             self.languages = language_payload.get("languages") or self.languages
             self.selected_language = language_payload.get("selectedLanguage", self.selected_language)
+            self.current_mode = mode_payload.get("selectedMode", self.current_mode)
             language_key = self.selected_language["key"]
 
             _, pending_payload = list_pending(language_key=language_key, server_base=self.server_base)

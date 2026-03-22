@@ -9,6 +9,8 @@ DATA_DIR = ROOT_DIR / "data"
 DB_PATH = DATA_DIR / "lango.db"
 FRONTEND_DIR = ROOT_DIR / "frontend"
 MAX_HISTORY_ENTRIES = 10
+DEFAULT_DEVICE_MODE = "learn"
+SUPPORTED_DEVICE_MODES = ("learn", "game")
 LANGUAGE_LOCALES = {
     "arabic": "ar-SA",
     "chinese": "zh-CN",
@@ -75,11 +77,29 @@ class TranslationStore:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS device_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+                """
+            )
             self._migrate_nullable_image_column(connection)
             self._migrate_created_at_local_column(connection)
             self._remove_demo_entries(connection)
             self._enforce_all_language_limits(connection)
+            self._ensure_device_state_defaults(connection)
             connection.commit()
+
+    def _ensure_device_state_defaults(self, connection):
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO device_state (key, value)
+            VALUES ('mode', ?)
+            """,
+            (DEFAULT_DEVICE_MODE,),
+        )
 
     def _migrate_nullable_image_column(self, connection):
         columns = connection.execute("PRAGMA table_info(translation_entries)").fetchall()
@@ -277,6 +297,36 @@ class TranslationStore:
             connection.commit()
         return cursor.rowcount > 0
 
+    def get_device_mode(self):
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT value FROM device_state WHERE key = 'mode'"
+            ).fetchone()
+        mode = str(row["value"]).strip().lower() if row else DEFAULT_DEVICE_MODE
+        if mode not in SUPPORTED_DEVICE_MODES:
+            mode = DEFAULT_DEVICE_MODE
+        return self._serialize_device_mode(mode)
+
+    def set_device_mode(self, mode_key):
+        normalized = str(mode_key or DEFAULT_DEVICE_MODE).strip().lower()
+        if normalized not in SUPPORTED_DEVICE_MODES:
+            raise ValueError(
+                "Unsupported mode. Expected one of: "
+                + ", ".join(SUPPORTED_DEVICE_MODES)
+            )
+
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """
+                INSERT INTO device_state (key, value)
+                VALUES ('mode', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (normalized,),
+            )
+            connection.commit()
+        return self._serialize_device_mode(normalized)
+
     def _normalize_image(self, image):
         if image is None:
             return None
@@ -316,4 +366,10 @@ class TranslationStore:
             "image": self._serialize_image(row["image"]),
             "time": row["time_label"],
             "createdAt": self._serialize_created_at(row),
+        }
+
+    def _serialize_device_mode(self, mode_key):
+        return {
+            "selectedMode": mode_key,
+            "modes": list(SUPPORTED_DEVICE_MODES),
         }

@@ -61,6 +61,33 @@ class DetectionClientTests(unittest.TestCase):
         requested_url = mocked_urlopen.call_args.args[0]
         self.assertEqual(requested_url, "http://127.0.0.1:9000/api/history?language=spanish")
 
+    def test_get_selected_mode_reads_mode_payload(self):
+        with patch.object(
+            detection_client.request,
+            "urlopen",
+            return_value=FakeResponse(200, {"selectedMode": "game", "modes": ["learn", "game"]}),
+        ) as mocked_urlopen:
+            status, payload = detection_client.get_selected_mode(server_base="http://127.0.0.1:9000")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["selectedMode"], "game")
+        requested_url = mocked_urlopen.call_args.args[0]
+        self.assertEqual(requested_url, "http://127.0.0.1:9000/api/device/mode")
+
+    def test_set_selected_mode_posts_mode_key(self):
+        with patch.object(
+            detection_client.request,
+            "urlopen",
+            return_value=FakeResponse(200, {"selectedMode": "game", "modes": ["learn", "game"]}),
+        ) as mocked_urlopen:
+            status, payload = detection_client.set_selected_mode("game", server_base="http://127.0.0.1:9000")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["selectedMode"], "game")
+        request_object = mocked_urlopen.call_args.args[0]
+        self.assertEqual(request_object.full_url, "http://127.0.0.1:9000/api/device/mode")
+        self.assertEqual(json.loads(request_object.data.decode("utf-8")), {"modeKey": "game"})
+
 
 if __name__ == "__main__":
     unittest.main()

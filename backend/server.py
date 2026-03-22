@@ -219,6 +219,9 @@ class LanGoHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/device/language":
             self._handle_device_language_get()
             return
+        if parsed.path == "/api/device/mode":
+            self._handle_device_mode_get()
+            return
         if parsed.path == "/api/history":
             self._handle_history_get(parsed)
             return
@@ -240,6 +243,9 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/device/language":
             self._handle_device_language_post()
+            return
+        if parsed.path == "/api/device/mode":
+            self._handle_device_mode_post()
             return
         if parsed.path == "/api/history":
             self._handle_history_post()
@@ -264,6 +270,9 @@ class LanGoHandler(SimpleHTTPRequestHandler):
 
     def _handle_device_language_get(self):
         self._write_json(device_language_state.get_selected_language())
+
+    def _handle_device_mode_get(self):
+        self._write_json(translation_store.get_device_mode())
 
     def _handle_pending_detection_get(self, parsed):
         params = parse_qs(parsed.query)
@@ -414,6 +423,24 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             return
 
         self._write_json(selected_language, status=HTTPStatus.OK)
+
+    def _handle_device_mode_post(self):
+        payload = self._read_json_body()
+        if payload is None:
+            return
+
+        mode_key = str(payload.get("modeKey", "")).strip()
+        if not mode_key:
+            self._write_json({"error": "Missing modeKey."}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        try:
+            selected_mode = translation_store.set_device_mode(mode_key)
+        except ValueError as exc:
+            self._write_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        self._write_json(selected_mode, status=HTTPStatus.OK)
 
     def _handle_upload_image(self, parsed):
         params = parse_qs(parsed.query)
