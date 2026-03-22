@@ -2,7 +2,6 @@ import json
 from urllib import request
 
 
-SERVER_BASE = "http://127.0.0.1:8000"
 
 
 def submit_detection(english, image=None, language_key=None, server_base=SERVER_BASE):
