@@ -1,5 +1,7 @@
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from hardware import detection_client
@@ -22,23 +24,28 @@ class FakeResponse:
 
 class DetectionClientTests(unittest.TestCase):
     def test_submit_detection_can_omit_language_key(self):
-        with patch.object(
-            detection_client.request,
-            "urlopen",
-            return_value=FakeResponse(201, {"entry": {"english": "book", "translated": "libro"}, "created": True}),
-        ) as mocked_urlopen:
-            status, payload = detection_client.submit_detection(
-                "book",
-                image="./assets/captures/book.jpg",
-                server_base="http://127.0.0.1:9000",
-            )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "book.png"
+            image_path.write_bytes(b"png-bytes")
+
+            with patch.object(
+                detection_client.request,
+                "urlopen",
+                return_value=FakeResponse(201, {"entry": {"english": "book", "translated": "libro"}, "created": True}),
+            ) as mocked_urlopen:
+                status, payload = detection_client.submit_detection(
+                    "book",
+                    image=str(image_path),
+                    server_base="http://127.0.0.1:9000",
+                )
 
         self.assertEqual(status, 201)
         self.assertEqual(payload["entry"]["translated"], "libro")
         request_object = mocked_urlopen.call_args.args[0]
         body = json.loads(request_object.data.decode("utf-8"))
         self.assertEqual(body["english"], "book")
-        self.assertEqual(body["image"], "./assets/captures/book.jpg")
+        self.assertEqual(body["imageFilename"], "book.png")
+        self.assertTrue(body["imageBase64"])
         self.assertNotIn("languageKey", body)
 
     def test_get_history_reads_language_specific_history(self):

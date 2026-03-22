@@ -96,6 +96,21 @@ class TranslationStoreDatabaseTests(unittest.TestCase):
         self.assertEqual(entries[0]["id"], created["id"])
         self.assertIsNone(entries[0]["image"])
 
+    def test_missing_managed_image_is_serialized_as_none(self):
+        created = self.store.create_entry(
+            "spanish",
+            english="keyboard",
+            translated="teclado",
+            speech="teclado",
+            image="./assets/captures/missing-keyboard.png",
+            time_label="3:19 PM",
+        )
+
+        entries = self.store.list_entries("spanish")
+
+        self.assertIsNone(created["image"])
+        self.assertIsNone(entries[0]["image"])
+
     def test_history_keeps_only_newest_ten_entries_per_language(self):
         for index in range(12):
             self.store.create_entry(

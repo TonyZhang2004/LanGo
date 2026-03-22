@@ -125,6 +125,13 @@ function TranslationCard({ entry, isPlaying, isDeleting, onPlay, onDelete }) {
         className: `thumb ${entry.image ? "" : "thumb is-placeholder"}`.trim(),
         src: entry.image || defaultImage,
         alt: entry.image ? `${entry.english} translation item` : `${entry.english} translation item without image`,
+        onError: (event) => {
+          if (event.currentTarget.src.endsWith("/assets/no-image.svg")) {
+            return;
+          }
+          event.currentTarget.src = defaultImage;
+          event.currentTarget.className = "thumb is-placeholder";
+        },
       })
     ),
     h("p", { className: "word english" }, entry.english),

@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT_DIR / "data"
 DB_PATH = DATA_DIR / "lango.db"
+FRONTEND_DIR = ROOT_DIR / "frontend"
 MAX_HISTORY_ENTRIES = 10
 LANGUAGE_LOCALES = {
     "arabic": "ar-SA",
@@ -282,6 +283,18 @@ class TranslationStore:
         image_text = str(image).strip()
         return image_text or None
 
+    def _serialize_image(self, image):
+        image_value = self._normalize_image(image)
+        if not image_value:
+            return None
+
+        relative_path = image_value.removeprefix("./")
+        if relative_path.startswith("assets/uploads/") or relative_path.startswith("assets/captures/"):
+            file_path = FRONTEND_DIR / relative_path
+            if not file_path.exists():
+                return None
+        return image_value
+
     def _machine_local_now(self):
         return datetime.now().astimezone()
 
@@ -300,7 +313,7 @@ class TranslationStore:
             "translated": row["translated"],
             "speech": row["speech"],
             "lang": LANGUAGE_LOCALES.get(row["language_key"]),
-            "image": row["image"],
+            "image": self._serialize_image(row["image"]),
             "time": row["time_label"],
             "createdAt": self._serialize_created_at(row),
         }

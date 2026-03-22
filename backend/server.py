@@ -1,3 +1,5 @@
+import base64
+import binascii
 import json
 import mimetypes
 import os
@@ -117,6 +119,23 @@ def save_uploaded_image(entry_id, filename, payload_bytes):
     return image_path, file_path
 
 
+def build_pending_capture_path(filename):
+    original_name = Path(filename or "capture.png").name
+    stem = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(original_name).stem).strip("-") or "capture"
+    suffix = Path(original_name).suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png"}:
+        suffix = ".png"
+    final_name = f"{stem}-{uuid4().hex[:8]}{suffix}"
+    return f"./assets/captures/{final_name}", CAPTURES_DIR / final_name
+
+
+def save_pending_capture(filename, payload_bytes):
+    CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
+    image_path, file_path = build_pending_capture_path(filename)
+    file_path.write_bytes(payload_bytes)
+    return image_path, file_path
+
+
 def clear_directory_files(directory):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
@@ -136,6 +155,22 @@ def resolve_managed_image_file(image_path):
     if not (relative_path.startswith("assets/uploads/") or relative_path.startswith("assets/captures/")):
         return None
     return FRONTEND_DIR / relative_path
+
+
+def resolve_detection_image(payload):
+    image_path = payload.get("image")
+    image_base64 = normalize_optional_text(payload.get("imageBase64"))
+    if not image_base64:
+        return image_path, None
+
+    try:
+        payload_bytes = base64.b64decode(image_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("imageBase64 must be valid base64 image data.") from exc
+
+    filename = normalize_optional_text(payload.get("imageFilename")) or "capture.png"
+    saved_image_path, file_path = save_pending_capture(filename, payload_bytes)
+    return saved_image_path, file_path
 
 
 def finalize_confirmed_entry_image(entry, pending_image, store=translation_store):
@@ -291,11 +326,12 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             return
 
         try:
+            image_path, staged_image_file = resolve_detection_image(payload)
             language_key = resolve_detection_language_key(payload)
             pending, created, discarded_entries = detection_workflow.submit_detection(
                 language_key=language_key,
                 english=english,
-                image=payload.get("image"),
+                image=image_path,
             )
         except ValueError as exc:
             self._write_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
@@ -303,6 +339,9 @@ class LanGoHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             self._write_json({"error": "Failed to create pending detection.", "details": str(exc)}, status=HTTPStatus.BAD_GATEWAY)
             return
+
+        if staged_image_file and not created and pending.get("image") != image_path:
+            staged_image_file.unlink(missing_ok=True)
 
         for discarded_entry in discarded_entries:
             image_file = resolve_managed_image_file(discarded_entry.get("image"))
