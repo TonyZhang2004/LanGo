@@ -31,6 +31,8 @@ class PiScreenHelperTests(unittest.TestCase):
         self.assertEqual(pi_screen.THEME["paper"], "#f7f3eb")
         self.assertEqual(pi_screen.THEME["ink"], "#151719")
         self.assertEqual(pi_screen.THEME["accent"], "#d7ff5c")
+        self.assertEqual(pi_screen.THEME["accent_soft"], "#edf8c8")
+        self.assertNotIn("accent_blue", pi_screen.THEME)
 
     def test_main_message_uses_pending_translation_when_selected(self):
         message = pi_screen.format_main_message(

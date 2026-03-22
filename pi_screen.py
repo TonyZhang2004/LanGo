@@ -33,8 +33,7 @@ THEME = {
     "line": "#d8d3c7",
     "accent": "#d7ff5c",
     "accent_strong": "#9bde37",
-    "accent_blue": "#82bbe9",
-    "accent_blue_soft": "#cfdcf6",
+    "accent_soft": "#edf8c8",
     "warm": "#f2b46b",
     "surface": "#fffaf1",
     "surface_alt": "#f4ede0",
@@ -48,6 +47,8 @@ BODY_BOLD_FONT = ("Avenir Next", 16, "bold")
 META_FONT = ("Avenir Next", 10, "bold")
 DISPLAY_FONT = ("Avenir Next", 24)
 DISPLAY_BOLD_FONT = ("Avenir Next", 28, "bold")
+TOUCH_FONT = ("Avenir Next", 20, "bold")
+TOUCH_FONT_SMALL = ("Avenir Next", 18, "bold")
 
 
 def format_display_time(timestamp, fallback_time=""):
@@ -312,9 +313,9 @@ class LanGoPiApp:
             controls,
             text="Add to History",
             command=self._confirm_selected_pending,
-            bg=THEME["accent_blue"] if selected else THEME["accent_blue_soft"],
+            bg=THEME["accent"] if selected else THEME["accent_soft"],
             fg=THEME["ink"],
-            activebackground=THEME["accent_blue"],
+            activebackground=THEME["accent_strong"],
             activeforeground=THEME["ink"],
             relief="flat",
             state="normal" if selected else "disabled",
@@ -341,7 +342,7 @@ class LanGoPiApp:
 
     def _render_pending_chip(self, parent, pending):
         is_selected = pending.get("pendingId") == self.selected_pending_id
-        bg = THEME["accent_blue"] if is_selected else THEME["accent_blue_soft"]
+        bg = THEME["accent"] if is_selected else THEME["surface_alt"]
 
         chip = tk.Frame(
             parent,
@@ -376,62 +377,108 @@ class LanGoPiApp:
 
         self._add_gear_button(stage).place(relx=0.97, rely=0.06, anchor="ne")
 
-        slider = tk.Frame(stage, bg=THEME["accent_blue_soft"], padx=6, pady=6)
-        slider.place(relx=0.5, rely=0.12, anchor="n")
+        slider = tk.Frame(stage, bg=THEME["surface_alt"], padx=8, pady=8)
+        slider.place(relx=0.5, rely=0.10, anchor="n")
 
         self._make_slider_button(slider, "Language", "language").pack(side="left", padx=(0, 8))
         self._make_slider_button(slider, "Mode", "mode").pack(side="left")
 
-        body = tk.Frame(stage, bg=THEME["paper_strong"])
-        body.place(relx=0.5, rely=0.30, anchor="n")
+        settings_card = tk.Frame(
+            stage,
+            bg=THEME["paper_strong"],
+            highlightbackground=THEME["line"],
+            highlightthickness=1,
+            padx=18,
+            pady=18,
+        )
+        settings_card.place(relx=0.5, rely=0.24, anchor="n", relwidth=0.86, relheight=0.68)
+
+        title_text = "Select language" if self.settings_tab == "language" else "Select mode"
+        tk.Label(
+            settings_card,
+            text=title_text,
+            bg=THEME["paper_strong"],
+            fg=THEME["muted"],
+            font=META_FONT,
+        ).pack(anchor="w", pady=(0, 10))
+
+        body_host = tk.Frame(settings_card, bg=THEME["paper_strong"])
+        body_host.pack(fill="both", expand=True)
 
         if self.settings_tab == "language":
-            self._render_language_buttons(body)
+            self._render_language_buttons(body_host)
         else:
-            self._render_mode_buttons(body)
+            self._render_mode_buttons(body_host)
 
     def _render_language_buttons(self, parent):
+        if not self.languages:
+            tk.Label(
+                parent,
+                text="No languages loaded yet.",
+                bg=THEME["paper_strong"],
+                fg=THEME["muted"],
+                font=BODY_FONT,
+            ).pack(anchor="center", expand=True)
+            return
+
+        canvas = tk.Canvas(parent, bg=THEME["paper_strong"], bd=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(
+            parent,
+            orient="vertical",
+            style="LanGo.Vertical.TScrollbar",
+            command=canvas.yview,
+        )
+        grid = tk.Frame(canvas, bg=THEME["paper_strong"])
+        grid.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=grid, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
         columns = 2
         for index, language in enumerate(self.languages):
             row = index // columns
             column = index % columns
             is_selected = language["key"] == self.selected_language["key"]
             button = self._make_option_button(
-                parent,
+                grid,
                 language["label"],
                 is_selected,
                 lambda key=language["key"]: self._handle_language_change(key),
             )
-            button.grid(row=row, column=column, padx=20, pady=18, sticky="nsew")
-            parent.grid_columnconfigure(column, weight=1)
+            button.grid(row=row, column=column, padx=12, pady=12, sticky="nsew")
+            grid.grid_columnconfigure(column, weight=1, uniform="language-column")
 
     def _render_mode_buttons(self, parent):
+        wrap = tk.Frame(parent, bg=THEME["paper_strong"])
+        wrap.pack(expand=True)
+
         for index, (label, key) in enumerate((("Learn", "learn"), ("Game", "game"))):
             is_selected = self.current_mode == key
             button = self._make_option_button(
-                parent,
+                wrap,
                 label,
                 is_selected,
                 lambda value=key: self._switch_mode(value),
             )
-            button.grid(row=index, column=0, padx=20, pady=18, sticky="ew")
-        parent.grid_columnconfigure(0, weight=1)
+            button.grid(row=index, column=0, padx=18, pady=18, sticky="ew")
+        wrap.grid_columnconfigure(0, weight=1)
 
     def _make_option_button(self, parent, text, is_selected, command):
         return tk.Button(
             parent,
             text=text,
             command=command,
-            bg=THEME["accent_blue"] if is_selected else THEME["accent_blue_soft"],
+            bg=THEME["accent"] if is_selected else THEME["surface_alt"],
             fg=THEME["ink"],
-            activebackground=THEME["accent_blue"],
+            activebackground=THEME["accent_strong"],
             activeforeground=THEME["ink"],
             relief="flat",
-            padx=28,
-            pady=12,
-            font=("Avenir Next", 18),
+            padx=36,
+            pady=20,
+            font=TOUCH_FONT,
             cursor="hand2",
-            width=10,
+            width=12,
         )
 
     def _make_slider_button(self, parent, text, tab_key):
@@ -440,16 +487,16 @@ class LanGoPiApp:
             parent,
             text=text,
             command=lambda: self._switch_settings_tab(tab_key),
-            bg=THEME["accent_blue"] if is_selected else THEME["accent_blue_soft"],
+            bg=THEME["accent"] if is_selected else THEME["surface_alt"],
             fg=THEME["ink"],
-            activebackground=THEME["accent_blue"],
+            activebackground=THEME["accent_strong"],
             activeforeground=THEME["ink"],
             relief="flat",
-            padx=26,
-            pady=10,
-            font=("Avenir Next", 18),
+            padx=34,
+            pady=14,
+            font=TOUCH_FONT_SMALL,
             cursor="hand2",
-            width=8,
+            width=9,
         )
 
     def _make_stage(self, parent):
