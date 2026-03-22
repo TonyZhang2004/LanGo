@@ -25,6 +25,7 @@ except ModuleNotFoundError:
 ROOT_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
 DEFAULT_POLL_MS = int(os.environ.get("LANGO_PI_POLL_MS", "2000"))
+DEFAULT_WINDOW_MODE = os.environ.get("LANGO_PI_WINDOW_MODE", "fullscreen").strip().lower() or "fullscreen"
 
 THEME = {
     "paper": "#f7f3eb",
@@ -46,14 +47,14 @@ TITLE_FONT = ("Avenir Next Condensed", 34, "bold")
 SCREEN_PROFILE = {
     "width": 480,
     "height": 320,
-    "shell_padding": 12,
-    "stage_padding": 10,
-    "stage_radius": 30,
-    "panel_padding": 14,
-    "panel_radius": 24,
-    "header_gap": 8,
-    "content_gap": 10,
-    "status_wrap": 360,
+    "shell_padding": 8,
+    "stage_padding": 8,
+    "stage_radius": 24,
+    "panel_padding": 10,
+    "panel_radius": 20,
+    "header_gap": 6,
+    "content_gap": 8,
+    "status_wrap": 320,
 }
 
 BODY_FONT = ("Avenir Next", 13)
@@ -76,8 +77,9 @@ MAX_HOME_PENDING = 1
 QUEUE_GRID_COLUMNS = 1
 QUEUE_CARD_HEIGHT = 154
 QUEUE_ACTION_HEIGHT = 62
-QUEUE_NAV_BUTTON_WIDTH = 74
-QUEUE_NAV_BUTTON_HEIGHT = 44
+QUEUE_NAV_BUTTON_WIDTH = 56
+QUEUE_NAV_BUTTON_HEIGHT = 36
+NAV_BUTTON_SIZE = 42
 SMALL_STATUS_MAX_CHARS = 30
 SMALL_LABEL_MAX_CHARS = 18
 SMALL_TRANSLATION_MAX_CHARS = 20
@@ -393,19 +395,37 @@ def truncate_copy(text, max_chars):
     return value[: max_chars - 1].rstrip() + "\u2026"
 
 
+def compact_language_label(label):
+    value = " ".join(str(label or "").split())
+    if value == "Mandarin Chinese":
+        return "Mandarin"
+    return value
+
+
 def queue_position_label(pending_items, selected_id):
     if not pending_items:
         return "0 of 0"
 
     pending_ids = [item.get("pendingId") for item in pending_items]
     if selected_id in pending_ids:
-        return f"{pending_ids.index(selected_id) + 1} of {len(pending_ids)}"
-    return f"1 of {len(pending_ids)}"
+        return f"{pending_ids.index(selected_id) + 1}/{len(pending_ids)}"
+    return f"1/{len(pending_ids)}"
 
 
 def format_queue_status(language_label, pending_count, max_chars=SMALL_STATUS_MAX_CHARS):
     compact_label = truncate_copy(language_label, max_chars)
     return f"{compact_label} \u00b7 {pending_count} waiting"
+
+
+def should_show_queue_navigation(pending_items):
+    return len(pending_items) > 1
+
+
+def resolve_window_mode(window_mode=None):
+    normalized = str(window_mode or DEFAULT_WINDOW_MODE).strip().lower()
+    if normalized not in {"fullscreen", "windowed"}:
+        return "fullscreen"
+    return normalized
 
 
 def resolve_supported_image(image_path):
@@ -454,12 +474,13 @@ def selected_pending_item(pending_items, selected_id):
 
 
 class LanGoPiApp:
-    def __init__(self, root=None, server_base=SERVER_BASE, poll_ms=DEFAULT_POLL_MS):
+    def __init__(self, root=None, server_base=SERVER_BASE, poll_ms=DEFAULT_POLL_MS, window_mode=None):
         if tk is None or ttk is None:
             raise RuntimeError("Tkinter is not available in this Python environment.")
         self.root = root or tk.Tk()
         self.server_base = server_base
         self.poll_ms = poll_ms
+        self.window_mode = resolve_window_mode(window_mode)
         self.languages = language_options()
         self.selected_language = {"key": "spanish", "label": "Spanish", "locale": "es-ES"}
         self.pending_items = []
@@ -517,10 +538,15 @@ class LanGoPiApp:
 
     def _configure_root(self):
         self.root.title("LanGo Pi")
-        self.root.attributes("-fullscreen", True)
         self.root.minsize(SCREEN_PROFILE["width"], SCREEN_PROFILE["height"])
         self.root.configure(bg=THEME["paper"])
         self.root.bind("<Tab>", self._exit_fullscreen)
+        if self.window_mode == "windowed":
+            self.root.attributes("-fullscreen", False)
+            self.root.geometry(f"{SCREEN_PROFILE['width']}x{SCREEN_PROFILE['height']}")
+            self.root.resizable(False, False)
+        else:
+            self.root.attributes("-fullscreen", True)
 
     def _configure_style(self):
         style = ttk.Style()
@@ -576,7 +602,6 @@ class LanGoPiApp:
             wraplength=SCREEN_PROFILE["status_wrap"],
             justify="left",
         )
-        self.status_label.pack(fill="x", anchor="w", pady=(0, SCREEN_PROFILE["header_gap"]))
 
         self.content_frame = tk.Frame(self.shell, bg=THEME["paper"])
         self.content_frame.pack(fill="both", expand=True)
@@ -594,29 +619,17 @@ class LanGoPiApp:
         stage = self._make_stage(self.content_frame)
         stage.pack(fill="both", expand=True)
         surface = stage.content
-        header = tk.Frame(surface, bg=THEME["paper_strong"])
-        header.pack(fill="x", pady=(0, SCREEN_PROFILE["header_gap"]))
-
-        title_block = tk.Frame(header, bg=THEME["paper_strong"])
-        title_block.pack(side="left", fill="x", expand=True)
+        topbar = tk.Frame(surface, bg=THEME["paper_strong"])
+        topbar.pack(fill="x", pady=(0, SCREEN_PROFILE["header_gap"]))
         tk.Label(
-            title_block,
-            text=truncate_copy(self.selected_language["label"], SMALL_LABEL_MAX_CHARS),
-            bg=THEME["paper_strong"],
-            fg=THEME["ink"],
-            font=DISPLAY_BOLD_FONT,
-            anchor="w",
-        ).pack(anchor="w")
-        tk.Label(
-            title_block,
-            text=format_queue_status(self.selected_language["label"], len(self.pending_items)),
+            topbar,
+            text=truncate_copy(compact_language_label(self.selected_language["label"]), 14),
             bg=THEME["paper_strong"],
             fg=THEME["muted"],
-            font=META_FONT,
+            font=BODY_BOLD_FONT,
             anchor="w",
-        ).pack(anchor="w", pady=(2, 0))
-
-        self._add_nav_button(header, navigation_icon(False)).pack(side="right")
+        ).pack(side="left", fill="x", expand=True)
+        self._add_nav_button(topbar, navigation_icon(False)).pack(side="right")
         if self.current_mode == "game":
             game_panel = RoundedPanel(
                 surface,
@@ -658,52 +671,36 @@ class LanGoPiApp:
         ).pack(anchor="w")
 
     def _render_pending_queue(self, parent):
-        header = tk.Frame(parent, bg=THEME["surface"])
-        header.pack(fill="x", pady=(0, SCREEN_PROFILE["content_gap"]))
-        tk.Label(
-            header,
-            text="Queue",
-            bg=THEME["surface"],
-            fg=THEME["muted"],
-            font=META_FONT,
-        ).pack(anchor="w")
-        tk.Label(
-            header,
-            text=format_queue_status(self.selected_language["label"], len(self.pending_items)),
-            bg=THEME["surface"],
-            fg=THEME["muted"],
-            font=BODY_BOLD_FONT,
-        ).pack(anchor="w", pady=(4, 0))
-
         if not self.pending_items:
             tk.Label(
                 parent,
-                text=f"No pending detections for {truncate_copy(self.selected_language['label'], SMALL_LABEL_MAX_CHARS)}.",
+                text="No pending detections.",
                 bg=THEME["surface"],
                 fg=THEME["muted"],
                 font=BODY_FONT,
                 justify="center",
-                wraplength=SCREEN_PROFILE["width"] - 96,
-            ).pack(anchor="center", pady=(28, 10))
+                wraplength=SCREEN_PROFILE["width"] - 80,
+            ).pack(anchor="center", expand=True)
             return
 
         selected_item = selected_pending_item(self.pending_items, self.selected_pending_id)
-        controls = tk.Frame(parent, bg=THEME["surface"])
-        controls.pack(fill="x", pady=(0, SCREEN_PROFILE["content_gap"]))
-        controls.grid_columnconfigure(1, weight=1)
-
-        self._make_queue_nav_button(controls, "\u2039", -1).grid(row=0, column=0, sticky="w")
-        tk.Label(
-            controls,
-            text=queue_position_label(self.pending_items, selected_item.get("pendingId")),
-            bg=THEME["surface"],
-            fg=THEME["ink"],
-            font=BODY_BOLD_FONT,
-            anchor="center",
-        ).grid(row=0, column=1, sticky="nsew")
-        self._make_queue_nav_button(controls, "\u203a", 1).grid(row=0, column=2, sticky="e")
-
         self._render_pending_card(parent, selected_item)
+
+        if should_show_queue_navigation(self.pending_items):
+            controls = tk.Frame(parent, bg=THEME["surface"])
+            controls.pack(fill="x", pady=(SCREEN_PROFILE["content_gap"], 0))
+            controls.grid_columnconfigure(1, weight=1)
+
+            self._make_queue_nav_button(controls, "\u2039", -1).grid(row=0, column=0, sticky="w")
+            tk.Label(
+                controls,
+                text=queue_position_label(self.pending_items, selected_item.get("pendingId")),
+                bg=THEME["surface"],
+                fg=THEME["muted"],
+                font=META_FONT,
+                anchor="center",
+            ).grid(row=0, column=1, sticky="nsew")
+            self._make_queue_nav_button(controls, "\u203a", 1).grid(row=0, column=2, sticky="e")
 
     def _render_pending_card(self, parent, pending):
         card = RoundedPanel(
@@ -716,7 +713,7 @@ class LanGoPiApp:
         )
         card.pack(fill="both", expand=True)
         body = card.content
-        body.grid_rowconfigure(2, weight=1)
+        body.grid_rowconfigure(1, weight=1)
         body.grid_columnconfigure(0, weight=1, uniform="pending-action")
         body.grid_columnconfigure(1, weight=1, uniform="pending-action")
 
@@ -739,37 +736,7 @@ class LanGoPiApp:
             font=DISPLAY_FONT,
             anchor="center",
             justify="center",
-        ).pack(fill="x", pady=(4, 0))
-
-        label_shell = RoundedPanel(
-            body,
-            fill=THEME["surface_alt"],
-            border=THEME["line"],
-            radius=22,
-            padding=8,
-            height=68,
-        )
-        label_shell.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 10))
-        tk.Label(
-            label_shell.content,
-            text=truncate_copy(format_pending_label(pending), 28),
-            bg=THEME["surface_alt"],
-            fg=THEME["accent_strong"],
-            font=("Avenir Next", 16, "bold"),
-            anchor="center",
-            justify="center",
-            wraplength=SCREEN_PROFILE["width"] - 120,
-        ).pack(fill="both", expand=True)
-
-        tk.Label(
-            body,
-            text=format_display_time(pending.get("createdAt"), ""),
-            bg=THEME["paper_strong"],
-            fg=THEME["muted"],
-            font=META_FONT,
-            anchor="center",
-            justify="center",
-        ).grid(row=2, column=0, columnspan=2, sticky="n", pady=(0, 12))
+        ).pack(fill="x", pady=(8, 0))
 
         RoundedButton(
             body,
@@ -784,7 +751,7 @@ class LanGoPiApp:
             text_color=THEME["paper_strong"],
             font=TOUCH_FONT_SMALL,
             border=THEME["line"],
-        ).grid(row=3, column=0, sticky="ew", padx=(0, 8))
+        ).grid(row=2, column=0, sticky="ew", padx=(0, 8), pady=(14, 0))
         RoundedButton(
             body,
             text="Discard",
@@ -798,7 +765,7 @@ class LanGoPiApp:
             text_color=THEME["accent_strong"],
             font=TOUCH_FONT_SMALL,
             border=THEME["line"],
-        ).grid(row=3, column=1, sticky="ew", padx=(8, 0))
+        ).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(14, 0))
 
     def _render_settings_screen(self):
         stage = self._make_stage(self.content_frame)
@@ -900,7 +867,7 @@ class LanGoPiApp:
             is_selected = language["key"] == self.selected_language["key"]
             button = self._make_option_button(
                 grid,
-                truncate_copy(language["label"], 15),
+                truncate_copy(compact_language_label(language["label"]), 15),
                 is_selected,
                 lambda key=language["key"]: self._handle_language_change(key),
             )
@@ -996,14 +963,14 @@ class LanGoPiApp:
             parent,
             text=icon_text,
             command=self._toggle_settings,
-            width=58,
-            height=58,
-            radius=18,
+            width=NAV_BUTTON_SIZE,
+            height=NAV_BUTTON_SIZE,
+            radius=14,
             fill=THEME["surface"],
             active_fill=THEME["paper_strong"],
             pressed_fill=THEME["accent_soft"],
             text_color=THEME["ink"],
-            font=("Avenir Next", 28),
+            font=("Avenir Next", 22),
             border=THEME["line"],
         )
 
