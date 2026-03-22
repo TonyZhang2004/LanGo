@@ -9,11 +9,14 @@ from backend.language_state import DeviceLanguageState
 from backend.server import (
     build_history_entry_payload,
     build_uploaded_image_path,
+    clear_pending_capture_storage,
+    finalize_confirmed_entry_image,
     resolve_detection_language_key,
     resolve_managed_image_file,
     resolve_tts_provider,
     save_uploaded_image,
 )
+from backend.translation_store import TranslationStore
 
 
 class FakeTranslator:
@@ -61,6 +64,49 @@ class ServerLogicTests(unittest.TestCase):
 
         self.assertEqual(image_file, Path(__file__).resolve().parent.parent / "frontend" / "assets" / "uploads" / "pumpkin.jpg")
         self.assertIsNone(resolve_managed_image_file("./assets/ball.svg"))
+
+    def test_clear_pending_capture_storage_removes_temp_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            captures_dir = Path(temp_dir) / "captures"
+            captures_dir.mkdir(parents=True, exist_ok=True)
+            (captures_dir / "apple.png").write_bytes(b"apple")
+            (captures_dir / "book.png").write_bytes(b"book")
+
+            clear_pending_capture_storage(captures_dir)
+
+            self.assertEqual(list(captures_dir.iterdir()), [])
+
+    def test_finalize_confirmed_entry_image_moves_capture_into_uploads(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_frontend = Path(temp_dir) / "frontend"
+            captures_dir = temp_frontend / "assets" / "captures"
+            uploads_dir = temp_frontend / "assets" / "uploads"
+            captures_dir.mkdir(parents=True, exist_ok=True)
+            uploads_dir.mkdir(parents=True, exist_ok=True)
+
+            capture_file = captures_dir / "apple.png"
+            capture_file.write_bytes(b"apple-bytes")
+
+            store = TranslationStore(Path(temp_dir) / "test.db")
+            entry = store.create_entry(
+                language_key="spanish",
+                english="apple",
+                translated="manzana",
+                speech="manzana",
+                image="./assets/captures/apple.png",
+                time_label="",
+            )
+
+            from unittest.mock import patch
+
+            with patch("backend.server.FRONTEND_DIR", temp_frontend), patch("backend.server.UPLOADS_DIR", uploads_dir):
+                updated_entry = finalize_confirmed_entry_image(entry, "./assets/captures/apple.png", store=store)
+
+            self.assertTrue(updated_entry["image"].startswith("./assets/uploads/"))
+            self.assertFalse(capture_file.exists())
+            promoted_file = temp_frontend / updated_entry["image"].removeprefix("./")
+            self.assertTrue(promoted_file.exists())
+            self.assertEqual(promoted_file.read_bytes(), b"apple-bytes")
 
     def test_build_history_entry_payload_uses_selected_device_language(self):
         with tempfile.TemporaryDirectory() as temp_dir:

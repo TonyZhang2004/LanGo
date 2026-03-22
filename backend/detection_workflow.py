@@ -60,7 +60,7 @@ class DetectionWorkflow:
     def confirm_pending(self, pending_id, store):
         pending_entry = self._pop_pending(pending_id)
         if not pending_entry:
-            return None
+            return None, None
 
         created_entry = store.create_entry(
             language_key=pending_entry["languageKey"],
@@ -70,7 +70,7 @@ class DetectionWorkflow:
             image=pending_entry.get("image"),
             time_label="",
         )
-        return created_entry
+        return created_entry, pending_entry
 
     def reject_pending(self, pending_id):
         pending_entry = self._pop_pending(pending_id)

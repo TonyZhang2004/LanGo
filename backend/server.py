@@ -117,6 +117,18 @@ def save_uploaded_image(entry_id, filename, payload_bytes):
     return image_path, file_path
 
 
+def clear_directory_files(directory):
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    for child in directory.iterdir():
+        if child.is_file():
+            child.unlink(missing_ok=True)
+
+
+def clear_pending_capture_storage(captures_dir=CAPTURES_DIR):
+    clear_directory_files(captures_dir)
+
+
 def resolve_managed_image_file(image_path):
     if not image_path:
         return None
@@ -124,6 +136,30 @@ def resolve_managed_image_file(image_path):
     if not (relative_path.startswith("assets/uploads/") or relative_path.startswith("assets/captures/")):
         return None
     return FRONTEND_DIR / relative_path
+
+
+def finalize_confirmed_entry_image(entry, pending_image, store=translation_store):
+    if not entry or not pending_image:
+        return entry
+
+    pending_relative = str(pending_image).removeprefix("./")
+    if not pending_relative.startswith("assets/captures/"):
+        return entry
+
+    source_file = resolve_managed_image_file(pending_image)
+    if not source_file or not source_file.exists():
+        return entry
+
+    current_image = str(entry.get("image") or "")
+    current_relative = current_image.removeprefix("./")
+    if current_relative.startswith("assets/uploads/"):
+        source_file.unlink(missing_ok=True)
+        return entry
+
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    uploaded_image_path, uploaded_file = build_uploaded_image_path(entry["id"], source_file.name)
+    source_file.replace(uploaded_file)
+    return store.update_entry_image(entry["id"], uploaded_image_path)
 
 
 class LanGoHandler(SimpleHTTPRequestHandler):
@@ -293,11 +329,12 @@ class LanGoHandler(SimpleHTTPRequestHandler):
             self._write_json({"error": "Missing pendingId."}, status=HTTPStatus.BAD_REQUEST)
             return
 
-        entry = detection_workflow.confirm_pending(pending_id, translation_store)
+        entry, pending_entry = detection_workflow.confirm_pending(pending_id, translation_store)
         if not entry:
             self._write_json({"error": "Pending detection not found."}, status=HTTPStatus.NOT_FOUND)
             return
 
+        entry = finalize_confirmed_entry_image(entry, pending_entry.get("image"), store=translation_store)
         self._write_json({"entry": entry}, status=HTTPStatus.CREATED)
 
     def _handle_detection_reject(self):
@@ -480,6 +517,7 @@ class LanGoHandler(SimpleHTTPRequestHandler):
 
 
 def run():
+    clear_pending_capture_storage()
     try:
         server = ThreadingHTTPServer((HOST, PORT), LanGoHandler)
     except OSError as exc:

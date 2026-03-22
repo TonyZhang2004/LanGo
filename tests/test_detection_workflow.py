@@ -61,9 +61,10 @@ class DetectionWorkflowTests(unittest.TestCase):
     def test_confirm_pending_moves_entry_into_history(self):
         pending, _, _ = self.workflow.submit_detection("japanese", "bottle", "./assets/captures/bottle.jpg")
 
-        entry = self.workflow.confirm_pending(pending["pendingId"], self.store)
+        entry, confirmed_pending = self.workflow.confirm_pending(pending["pendingId"], self.store)
 
         self.assertEqual(entry["english"], "bottle")
+        self.assertEqual(confirmed_pending["image"], "./assets/captures/bottle.jpg")
         self.assertEqual(self.store.list_entries("japanese")[0]["id"], entry["id"])
         self.assertEqual(self.workflow.list_pending("japanese"), [])
 
