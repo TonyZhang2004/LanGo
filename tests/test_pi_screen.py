@@ -39,12 +39,17 @@ class PiScreenHelperTests(unittest.TestCase):
         self.assertEqual(pi_screen.navigation_icon(False), pi_screen.GEAR_ICON)
         self.assertEqual(pi_screen.navigation_icon(True), pi_screen.HOME_ICON)
 
-    def test_visible_pending_items_limits_homepage_queue_to_five(self):
+    def test_visible_pending_items_limits_homepage_queue_to_four(self):
         items = [{"pendingId": str(index)} for index in range(7)]
 
         visible = pi_screen.visible_pending_items(items)
 
-        self.assertEqual([item["pendingId"] for item in visible], ["0", "1", "2", "3", "4"])
+        self.assertEqual([item["pendingId"] for item in visible], ["0", "1", "2", "3"])
+
+    def test_format_pending_label_combines_english_and_translation(self):
+        label = pi_screen.format_pending_label({"english": "word", "translated": "trans"})
+
+        self.assertEqual(label, "word → trans")
 
     def test_settings_switcher_is_sized_as_primary_control(self):
         self.assertEqual(pi_screen.SWITCHER_BAR_RELWIDTH, 0.76)
@@ -84,7 +89,9 @@ class PiScreenHelperTests(unittest.TestCase):
         self.assertGreaterEqual(pi_screen.TOUCH_FONT[1], 24)
         self.assertGreaterEqual(pi_screen.TOUCH_FONT_SMALL[1], 22)
         self.assertEqual(pi_screen.MODE_TILE_SIZE, 180)
-        self.assertEqual(pi_screen.MAX_HOME_PENDING, 5)
+        self.assertEqual(pi_screen.MAX_HOME_PENDING, 4)
+        self.assertEqual(pi_screen.QUEUE_GRID_COLUMNS, 2)
+        self.assertGreaterEqual(pi_screen.QUEUE_ACTION_HEIGHT, 60)
 
 
 if __name__ == "__main__":

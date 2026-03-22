@@ -59,8 +59,10 @@ SWITCHER_BAR_HEIGHT = 104
 SWITCHER_BUTTON_WIDTH = 170
 SWITCHER_BUTTON_HEIGHT = 80
 MODE_TILE_SIZE = 180
-MAX_HOME_PENDING = 5
-QUEUE_ROW_HEIGHT = 108
+MAX_HOME_PENDING = 4
+QUEUE_GRID_COLUMNS = 2
+QUEUE_CARD_HEIGHT = 214
+QUEUE_ACTION_HEIGHT = 66
 
 
 if tk is not None:
@@ -392,6 +394,14 @@ def visible_pending_items(pending_items, max_items=MAX_HOME_PENDING):
     return list(pending_items[:max_items])
 
 
+def format_pending_label(pending):
+    english = str(pending.get("english", "")).strip()
+    translated = str(pending.get("translated", "")).strip()
+    if english and translated:
+        return f"{english} \u2192 {translated}"
+    return english or translated or "Pending translation"
+
+
 class LanGoPiApp:
     def __init__(self, root=None, server_base=SERVER_BASE, poll_ms=DEFAULT_POLL_MS):
         if tk is None or ttk is None:
@@ -595,100 +605,90 @@ class LanGoPiApp:
             ).pack(anchor="center", pady=(28, 0))
             return
 
-        rows = tk.Frame(parent, bg=THEME["surface"])
-        rows.pack(fill="both", expand=True)
+        cards = tk.Frame(parent, bg=THEME["surface"])
+        cards.pack(fill="x", anchor="n", pady=(10, 0))
+        visible_items = visible_pending_items(self.pending_items)
+        for column in range(QUEUE_GRID_COLUMNS):
+            cards.grid_columnconfigure(column, weight=1, uniform="pending-column")
 
-        for pending in visible_pending_items(self.pending_items):
-            self._render_pending_row(rows, pending)
+        for index, pending in enumerate(visible_items):
+            row = index // QUEUE_GRID_COLUMNS
+            column = index % QUEUE_GRID_COLUMNS
+            self._render_pending_card(cards, pending, row, column)
 
-    def _render_pending_row(self, parent, pending):
-        row = RoundedPanel(
+    def _render_pending_card(self, parent, pending, row_index, column_index):
+        card = RoundedPanel(
             parent,
             fill=THEME["paper_strong"],
             border=THEME["line"],
-            radius=30,
-            padding=14,
-            height=QUEUE_ROW_HEIGHT,
+            radius=36,
+            padding=18,
+            height=QUEUE_CARD_HEIGHT,
         )
-        row.pack(fill="x", pady=(0, 12))
-        body = row.content
-        body.grid_columnconfigure(1, weight=1)
+        card.grid(row=row_index, column=column_index, padx=14, pady=14, sticky="ew")
+        body = card.content
+        body.grid_rowconfigure(1, weight=1)
+        body.grid_columnconfigure(0, weight=1, uniform="pending-action")
+        body.grid_columnconfigure(1, weight=1, uniform="pending-action")
 
-        image = self._load_supported_photo(pending.get("image"), 72)
-        thumb_host = tk.Frame(body, bg=THEME["paper_strong"], width=78, height=78)
-        thumb_host.grid(row=0, column=0, rowspan=2, sticky="nsw", padx=(0, 14))
-        thumb_host.grid_propagate(False)
-        if image:
-            label = tk.Label(thumb_host, image=image, bg=THEME["paper_strong"])
-            label.image = image
-            label.place(relx=0.5, rely=0.5, anchor="center")
-        else:
-            tk.Label(
-                thumb_host,
-                text="No\nImage",
-                bg=THEME["surface_alt"],
-                fg=THEME["muted"],
-                font=("Avenir Next", 11, "bold"),
-                width=7,
-                height=4,
-                justify="center",
-            ).place(relx=0.5, rely=0.5, anchor="center")
+        label_shell = RoundedPanel(
+            body,
+            fill=THEME["surface_alt"],
+            border=THEME["line"],
+            radius=32,
+            padding=10,
+            height=92,
+        )
+        label_shell.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 16))
+        tk.Label(
+            label_shell.content,
+            text=format_pending_label(pending),
+            bg=THEME["surface_alt"],
+            fg=THEME["accent_strong"],
+            font=("Avenir Next", 28, "bold"),
+            anchor="center",
+            justify="center",
+            wraplength=320,
+        ).pack(fill="both", expand=True)
 
-        tk.Label(
-            body,
-            text=pending.get("english", ""),
-            bg=THEME["paper_strong"],
-            fg=THEME["ink"],
-            font=("Avenir Next", 18, "bold"),
-            anchor="w",
-        ).grid(row=0, column=1, sticky="w")
-        tk.Label(
-            body,
-            text=pending.get("translated", ""),
-            bg=THEME["paper_strong"],
-            fg=THEME["muted"],
-            font=("Avenir Next", 14, "bold"),
-            anchor="w",
-        ).grid(row=1, column=1, sticky="w", pady=(6, 0))
         tk.Label(
             body,
             text=format_display_time(pending.get("createdAt"), ""),
             bg=THEME["paper_strong"],
             fg=THEME["muted"],
-            font=("Avenir Next", 11),
-            anchor="w",
-        ).grid(row=2, column=1, sticky="w", pady=(8, 0))
+            font=("Avenir Next", 13, "bold"),
+            anchor="center",
+            justify="center",
+        ).grid(row=1, column=0, columnspan=2, sticky="n", pady=(0, 14))
 
-        controls = tk.Frame(body, bg=THEME["paper_strong"])
-        controls.grid(row=0, column=2, rowspan=3, sticky="nse", padx=(14, 0))
         RoundedButton(
-            controls,
+            body,
             text="Save",
             command=lambda item=pending: self._confirm_pending_item(item),
-            width=118,
-            height=46,
-            radius=22,
+            width=146,
+            height=QUEUE_ACTION_HEIGHT,
+            radius=28,
             fill=THEME["accent"],
             active_fill=THEME["accent_strong"],
             pressed_fill=THEME["accent_strong"],
             text_color=THEME["paper_strong"],
-            font=("Avenir Next", 15, "bold"),
+            font=("Avenir Next", 24, "bold"),
             border=THEME["line"],
-        ).pack(pady=(0, 8))
+        ).grid(row=2, column=0, sticky="ew", padx=(0, 10))
         RoundedButton(
-            controls,
+            body,
             text="Discard",
             command=lambda item=pending: self._reject_pending_item(item),
-            width=118,
-            height=46,
-            radius=22,
-            fill=THEME["surface_alt"],
-            active_fill=THEME["warm"],
-            pressed_fill=THEME["warm"],
-            text_color=THEME["ink"],
-            font=("Avenir Next", 15, "bold"),
+            width=146,
+            height=QUEUE_ACTION_HEIGHT,
+            radius=28,
+            fill=THEME["warm"],
+            active_fill=THEME["accent_soft"],
+            pressed_fill=THEME["accent_strong"],
+            text_color=THEME["accent_strong"],
+            font=("Avenir Next", 24, "bold"),
             border=THEME["line"],
-        ).pack()
+        ).grid(row=2, column=1, sticky="ew", padx=(10, 0))
 
     def _render_settings_screen(self):
         stage = self._make_stage(self.content_frame)
