@@ -113,14 +113,25 @@ function speakWithBrowser(text, lang, setPlayingId, entryId, setAudioError) {
   return true;
 }
 
-function TranslationCard({ entry, isPlaying, isDeleting, onPlay, onDelete }) {
+function TranslationCard({ entry, isPlaying, isDeleting, onPlay, onDelete, onPreviewImage }) {
   const displayTime = formatFullDateTime(entry.createdAt, entry.time);
   return h(
     "article",
     { className: "history-card" },
     h(
-      "div",
-      { className: "thumb-wrap" },
+      "button",
+      {
+        className: `thumb-button ${entry.image ? "" : "is-disabled"}`.trim(),
+        type: "button",
+        onClick: () => onPreviewImage(entry),
+        disabled: !entry.image,
+        "aria-label": entry.image
+          ? `Open enlarged image for ${entry.english}`
+          : `No image available for ${entry.english}`,
+      },
+      h(
+        "div",
+        { className: "thumb-wrap" },
       h("img", {
         className: `thumb ${entry.image ? "" : "thumb is-placeholder"}`.trim(),
         src: entry.image || defaultImage,
@@ -133,6 +144,7 @@ function TranslationCard({ entry, isPlaying, isDeleting, onPlay, onDelete }) {
           event.currentTarget.className = "thumb is-placeholder";
         },
       })
+      )
     ),
     h("p", { className: "word english" }, entry.english),
     h(
@@ -176,6 +188,7 @@ function App() {
   const [historyError, setHistoryError] = useState("");
   const [voiceNotice, setVoiceNotice] = useState("");
   const [syncNonce, setSyncNonce] = useState(0);
+  const [previewEntry, setPreviewEntry] = useState(null);
 
   const stampSyncTime = () => {
     setLastSyncTime(fullDateTimeFormatter.format(new Date()));
@@ -249,6 +262,21 @@ function App() {
       cancelled = true;
     };
   }, [selectedLanguage, syncNonce]);
+
+  useEffect(() => {
+    if (!previewEntry) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setPreviewEntry(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewEntry]);
 
   const entries = translationsByLanguage[selectedLanguage] || [];
 
@@ -397,10 +425,58 @@ function App() {
               isDeleting: deletingId === entry.id,
               onPlay: () => handlePlayAudio(entry),
               onDelete: () => handleDeleteEntry(entry),
+              onPreviewImage: setPreviewEntry,
             })
           )
         )
-      )
+      ),
+      previewEntry
+        ? h(
+            "div",
+            {
+              className: "image-modal-backdrop",
+              role: "presentation",
+              onClick: () => setPreviewEntry(null),
+            },
+            h(
+              "section",
+              {
+                className: "image-modal",
+                role: "dialog",
+                "aria-modal": "true",
+                "aria-label": `Enlarged image for ${previewEntry.english}`,
+                onClick: (event) => event.stopPropagation(),
+              },
+              h(
+                "button",
+                {
+                  className: "image-modal-close",
+                  type: "button",
+                  onClick: () => setPreviewEntry(null),
+                  "aria-label": "Close image preview",
+                },
+                "×"
+              ),
+              h(
+                "div",
+                { className: "image-modal-copy" },
+                h("p", { className: "section-kicker" }, languageNames[selectedLanguage]),
+                h("h3", { className: "image-modal-title" }, `${previewEntry.english} ↔ ${previewEntry.translated}`)
+              ),
+              h("img", {
+                className: "image-modal-photo",
+                src: previewEntry.image || defaultImage,
+                alt: `${previewEntry.english} enlarged preview`,
+                onError: (event) => {
+                  if (event.currentTarget.src.endsWith("/assets/no-image.svg")) {
+                    return;
+                  }
+                  event.currentTarget.src = defaultImage;
+                },
+              })
+            )
+          )
+        : null
     )
   );
 }

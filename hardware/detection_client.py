@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib import request
 
 
-
+SERVER_BASE = "http://35.3.62.156:8000"
 
 def submit_detection(english, image=None, image_bytes=None, image_filename=None, language_key=None, server_base=SERVER_BASE):
     payload = {

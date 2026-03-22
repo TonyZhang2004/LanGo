@@ -66,6 +66,15 @@ class FrontendSmokeTests(unittest.TestCase):
         self.assertIn("thumb is-placeholder", script)
         self.assertIn(".thumb.is-placeholder", styles)
 
+    def test_frontend_supports_enlarged_image_preview_modal(self):
+        script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
+        styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("image-modal-backdrop", script)
+        self.assertIn("Close image preview", script)
+        self.assertIn("setPreviewEntry", script)
+        self.assertIn(".image-modal", styles)
+        self.assertIn(".image-modal-close", styles)
+
     def test_frontend_disables_manual_upload_controls(self):
         script = (ROOT_DIR / "frontend" / "script.js").read_text(encoding="utf-8")
         styles = (ROOT_DIR / "frontend" / "styles.css").read_text(encoding="utf-8")

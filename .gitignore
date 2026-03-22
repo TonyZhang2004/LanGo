@@ -14,6 +14,9 @@ data/*.db
 data/*.sqlite
 data/*.sqlite3
 
+# Generated frontend assets
+frontend/assets/uploads/
+
 # Environment files
 .env
 .env.*
