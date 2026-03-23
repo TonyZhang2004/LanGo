@@ -8,6 +8,7 @@ venv/
 
 # Local caches
 .cache/
+.codex/
 
 # Local data
 data/*.db
